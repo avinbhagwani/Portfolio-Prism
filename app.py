@@ -578,513 +578,543 @@ def run_rolling_regression(
 
 
 # =========================================================
-# UI
+# PRISM NAVIGATION
 # =========================================================
 
-st.title("📊 Mutual Fund Factor Analysis Dashboard")
-st.caption(
-    "CAPM / Fama-French factor analysis for individual funds "
-    "and custom portfolios."
+st.sidebar.title("PRISM")
+st.sidebar.markdown("---")
+
+page = st.sidebar.radio(
+    "Navigate",
+    ["Factor Analysis", "Should I Panic?"],
+    label_visibility="collapsed"
 )
 
-analysis_type = st.radio(
-    "Analysis Type",
-    ["Individual Fund", "Portfolio of Funds"],
-    horizontal=True
-)
+if page == "Should I Panic?":
+    st.title("Should I Panic?")
+    st.divider()
 
-st.divider()
-
-# =========================================================
-# COMMON ANALYSIS SETTINGS
-# =========================================================
-
-col1, col2 = st.columns(2)
-
-with col1:
-    model_name = st.selectbox(
-        "Factor Model",
-        list(MODEL_CONFIG.keys()),
-        index=4
+    st.markdown(
+        """
+        <div style="text-align:center; padding-top:120px;">
+            <h1 style="font-size:48px;">Coming Soon</h1>
+            <p style="font-size:20px; color:#777;">
+                This section is currently under development.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
-
-with col2:
-    rolling_name = st.selectbox(
-        "Rolling Regression",
-        list(ROLLING_WINDOWS.keys())
-    )
-
-model_key = MODEL_CONFIG[model_name]["key"]
-rolling_months = ROLLING_WINDOWS[rolling_name]
-
-# =========================================================
-# INDIVIDUAL FUND
-# =========================================================
-
-if analysis_type == "Individual Fund":
-
-    st.subheader("Fund Selection")
-
-    search_term = st.text_input(
-        "Search Fund",
-        placeholder="Type at least 3 letters of a fund name..."
-    )
-
-    matches = search_funds(search_term)
-
-    if search_term and len(search_term) >= 3:
-
-        if not matches:
-            st.warning("No funds found.")
-
-        else:
-
-            options = {
-                f"{x['name']} (Code: {x['code']})": x["code"]
-                for x in matches
-            }
-
-            selected_label = st.selectbox(
-                "Select Fund",
-                list(options.keys())
-            )
-
-            selected_code = options[selected_label]
-
-            fund_df = fetch_fund_history(selected_code)
-
-            available_dates = month_end_dates(fund_df)
-
-            if available_dates:
-
-                d1, d2 = st.columns(2)
-
-                with d1:
-                    start_date = st.selectbox(
-                        "Start Date",
-                        available_dates,
-                        format_func=lambda x: x.strftime("%b %Y"),
-                        index=0
-                    )
-
-                with d2:
-                    end_date = st.selectbox(
-                        "End Date",
-                        available_dates,
-                        format_func=lambda x: x.strftime("%b %Y"),
-                        index=len(available_dates) - 1
-                    )
-
-                if start_date >= end_date:
-
-                    st.error(
-                        "Start Date must be before End Date."
-                    )
-
-                else:
-
-                    run_button = st.button(
-                        "Run Analysis",
-                        type="primary"
-                    )
-
-                    if run_button:
-
-                        filtered = fund_df[
-                            (fund_df["date"] >= start_date) &
-                            (fund_df["date"] <= end_date)
-                        ]
-
-                        st.subheader("NAV Performance")
-
-                        fig, ax = plt.subplots(figsize=(12, 4))
-
-                        ax.plot(
-                            filtered["date"],
-                            filtered["nav"],
-                            linewidth=2
-                        )
-
-                        ax.set_xlabel("Date")
-                        ax.set_ylabel("NAV")
-                        ax.set_title(
-                            "NAV Performance",
-                            fontsize=17,
-                            fontweight="bold"
-                        )
-                        ax.grid(
-                            axis="y",
-                            linestyle=":",
-                            alpha=0.4
-                        )
-
-                        fig.autofmt_xdate()
-                        fig.tight_layout()
-
-                        st.pyplot(fig)
-                        plt.close(fig)
-
-                        monthly_returns = get_monthly_returns(
-                            selected_code,
-                            start_date,
-                            end_date
-                        )
-
-                        result = run_factor_analysis(
-                            monthly_returns,
-                            model_key,
-                            "Individual Fund"
-                        )
-
-                        if result and rolling_months:
-
-                            run_rolling_regression(
-                                result["regression_df"],
-                                get_model_config(model_key)["factors"],
-                                rolling_months,
-                                "Individual Fund"
-                            )
-
-            else:
-                st.warning("No month-end NAV dates available.")
-
-# =========================================================
-# PORTFOLIO
-# =========================================================
 
 else:
+    # =========================================================
+    # UI
+    # =========================================================
 
-    st.subheader("Portfolio Construction")
-
-    st.info(
-        "Select up to 10 funds. Portfolio weights must total exactly 100%. "
-        "The portfolio regression is run on the calculated portfolio return series."
+    st.title("📊 Mutual Fund Factor Analysis Dashboard")
+    st.caption(
+        "CAPM / Fama-French factor analysis for individual funds "
+        "and custom portfolios."
     )
 
-    selected_portfolio = []
+    analysis_type = st.radio(
+        "Analysis Type",
+        ["Individual Fund", "Portfolio of Funds"],
+        horizontal=True
+    )
 
-    for i in range(10):
+    st.divider()
 
-        st.markdown(f"**Fund {i + 1}**")
+    # =========================================================
+    # COMMON ANALYSIS SETTINGS
+    # =========================================================
 
-        c1, c2, c3 = st.columns([2, 5, 1])
+    col1, col2 = st.columns(2)
 
-        with c1:
+    with col1:
+        model_name = st.selectbox(
+            "Factor Model",
+            list(MODEL_CONFIG.keys()),
+            index=4
+        )
 
-            search = st.text_input(
-                f"Search {i + 1}",
-                key=f"search_{i}",
-                placeholder="Search fund..."
-            )
+    with col2:
+        rolling_name = st.selectbox(
+            "Rolling Regression",
+            list(ROLLING_WINDOWS.keys())
+        )
 
-        matches = search_funds(search)
+    model_key = MODEL_CONFIG[model_name]["key"]
+    rolling_months = ROLLING_WINDOWS[rolling_name]
 
-        with c2:
+    # =========================================================
+    # INDIVIDUAL FUND
+    # =========================================================
 
-            if matches:
+    if analysis_type == "Individual Fund":
+
+        st.subheader("Fund Selection")
+
+        search_term = st.text_input(
+            "Search Fund",
+            placeholder="Type at least 3 letters of a fund name..."
+        )
+
+        matches = search_funds(search_term)
+
+        if search_term and len(search_term) >= 3:
+
+            if not matches:
+                st.warning("No funds found.")
+
+            else:
 
                 options = {
                     f"{x['name']} (Code: {x['code']})": x["code"]
                     for x in matches
                 }
 
-                labels = ["No fund"] + list(options.keys())
-
                 selected_label = st.selectbox(
-                    f"Select Fund {i + 1}",
-                    labels,
-                    key=f"fund_{i}"
+                    "Select Fund",
+                    list(options.keys())
                 )
 
-                code = (
-                    None
-                    if selected_label == "No fund"
-                    else options[selected_label]
-                )
+                selected_code = options[selected_label]
 
-            else:
+                fund_df = fetch_fund_history(selected_code)
 
-                code = None
+                available_dates = month_end_dates(fund_df)
 
-        with c3:
+                if available_dates:
 
-            weight = st.number_input(
-                "Weight %",
-                min_value=0.0,
-                max_value=100.0,
-                value=0.0,
-                step=0.5,
-                key=f"weight_{i}"
-            )
+                    d1, d2 = st.columns(2)
 
-        if code and weight > 0:
+                    with d1:
+                        start_date = st.selectbox(
+                            "Start Date",
+                            available_dates,
+                            format_func=lambda x: x.strftime("%b %Y"),
+                            index=0
+                        )
 
-            selected_portfolio.append(
-                {
-                    "code": code,
-                    "weight": weight,
-                    "name": selected_label
-                }
-            )
+                    with d2:
+                        end_date = st.selectbox(
+                            "End Date",
+                            available_dates,
+                            format_func=lambda x: x.strftime("%b %Y"),
+                            index=len(available_dates) - 1
+                        )
 
-    total_weight = sum(
-        x["weight"]
-        for x in selected_portfolio
-    )
+                    if start_date >= end_date:
 
-    if abs(total_weight - 100) < 0.001:
+                        st.error(
+                            "Start Date must be before End Date."
+                        )
 
-        st.success(
-            f"Total Portfolio Weight: {total_weight:.1f}% ✓"
-        )
+                    else:
+
+                        run_button = st.button(
+                            "Run Analysis",
+                            type="primary"
+                        )
+
+                        if run_button:
+
+                            filtered = fund_df[
+                                (fund_df["date"] >= start_date) &
+                                (fund_df["date"] <= end_date)
+                            ]
+
+                            st.subheader("NAV Performance")
+
+                            fig, ax = plt.subplots(figsize=(12, 4))
+
+                            ax.plot(
+                                filtered["date"],
+                                filtered["nav"],
+                                linewidth=2
+                            )
+
+                            ax.set_xlabel("Date")
+                            ax.set_ylabel("NAV")
+                            ax.set_title(
+                                "NAV Performance",
+                                fontsize=17,
+                                fontweight="bold"
+                            )
+                            ax.grid(
+                                axis="y",
+                                linestyle=":",
+                                alpha=0.4
+                            )
+
+                            fig.autofmt_xdate()
+                            fig.tight_layout()
+
+                            st.pyplot(fig)
+                            plt.close(fig)
+
+                            monthly_returns = get_monthly_returns(
+                                selected_code,
+                                start_date,
+                                end_date
+                            )
+
+                            result = run_factor_analysis(
+                                monthly_returns,
+                                model_key,
+                                "Individual Fund"
+                            )
+
+                            if result and rolling_months:
+
+                                run_rolling_regression(
+                                    result["regression_df"],
+                                    get_model_config(model_key)["factors"],
+                                    rolling_months,
+                                    "Individual Fund"
+                                )
+
+                else:
+                    st.warning("No month-end NAV dates available.")
+
+    # =========================================================
+    # PORTFOLIO
+    # =========================================================
 
     else:
 
-        st.error(
-            f"Total Portfolio Weight: {total_weight:.1f}% "
-            f"— must equal 100%"
+        st.subheader("Portfolio Construction")
+
+        st.info(
+            "Select up to 10 funds. Portfolio weights must total exactly 100%. "
+            "The portfolio regression is run on the calculated portfolio return series."
         )
 
-    # -----------------------------------------------------
-    # COMMON DATES
-    # -----------------------------------------------------
+        selected_portfolio = []
 
-    codes = [
-        x["code"]
-        for x in selected_portfolio
-    ]
+        for i in range(10):
 
-    if codes:
+            st.markdown(f"**Fund {i + 1}**")
 
-        common_dates = get_common_month_end_dates(codes)
+            c1, c2, c3 = st.columns([2, 5, 1])
 
-        if common_dates:
+            with c1:
 
-            st.write(
-                f"**Common history:** "
-                f"{common_dates[0].strftime('%b %Y')} "
-                f"to "
-                f"{common_dates[-1].strftime('%b %Y')}"
-            )
-
-            d1, d2 = st.columns(2)
-
-            with d1:
-
-                start_date = st.selectbox(
-                    "Start Date",
-                    common_dates,
-                    format_func=lambda x: x.strftime("%b %Y"),
-                    index=0,
-                    key="portfolio_start"
+                search = st.text_input(
+                    f"Search {i + 1}",
+                    key=f"search_{i}",
+                    placeholder="Search fund..."
                 )
 
-            with d2:
+            matches = search_funds(search)
 
-                end_date = st.selectbox(
-                    "End Date",
-                    common_dates,
-                    format_func=lambda x: x.strftime("%b %Y"),
-                    index=len(common_dates) - 1,
-                    key="portfolio_end"
-                )
+            with c2:
 
-            if st.button(
-                "Run Portfolio Analysis",
-                type="primary"
-            ):
+                if matches:
 
-                if abs(total_weight - 100) > 0.001:
-
-                    st.error(
-                        "Portfolio weights must total exactly 100%."
-                    )
-                    st.stop()
-
-                if start_date >= end_date:
-
-                    st.error(
-                        "Start Date must be before End Date."
-                    )
-                    st.stop()
-
-                returns_list = []
-
-                for item in selected_portfolio:
-
-                    returns = get_monthly_returns(
-                        item["code"],
-                        start_date,
-                        end_date
-                    )
-
-                    if returns.empty:
-
-                        st.error(
-                            f"No return data available for "
-                            f"{item['name']}."
-                        )
-                        st.stop()
-
-                    returns_list.append(
-                        returns.rename(
-                            item["code"]
-                        )
-                    )
-
-                returns_df = pd.concat(
-                    returns_list,
-                    axis=1
-                ).dropna()
-
-                if returns_df.empty:
-
-                    st.error(
-                        "No common monthly return observations "
-                        "are available."
-                    )
-                    st.stop()
-
-                # -----------------------------------------
-                # CALCULATE PORTFOLIO RETURNS
-                # -----------------------------------------
-
-                weights = {
-                    x["code"]: x["weight"] / 100
-                    for x in selected_portfolio
-                }
-
-                portfolio_returns = pd.Series(
-                    0.0,
-                    index=returns_df.index
-                )
-
-                for code, weight in weights.items():
-
-                    portfolio_returns += (
-                        returns_df[code]
-                        * weight
-                    )
-
-                portfolio_returns.name = (
-                    "Portfolio Return"
-                )
-
-                # -----------------------------------------
-                # PORTFOLIO SUMMARY
-                # -----------------------------------------
-
-                st.subheader("Portfolio")
-
-                portfolio_table = pd.DataFrame([
-                    {
-                        "Fund": x["name"],
-                        "Weight": x["weight"]
+                    options = {
+                        f"{x['name']} (Code: {x['code']})": x["code"]
+                        for x in matches
                     }
-                    for x in selected_portfolio
-                ])
 
-                st.dataframe(
-                    portfolio_table.style.format({
-                        "Weight": "{:.1f}%"
-                    }),
-                    use_container_width=True,
-                    hide_index=True
-                )
+                    labels = ["No fund"] + list(options.keys())
 
-                # -----------------------------------------
-                # CUMULATIVE RETURN
-                # -----------------------------------------
-
-                cumulative = (
-                    (1 + portfolio_returns / 100)
-                    .cumprod()
-                    - 1
-                ) * 100
-
-                fig, ax = plt.subplots(figsize=(12, 5))
-
-                ax.plot(
-                    cumulative.index,
-                    cumulative.values,
-                    linewidth=2
-                )
-
-                ax.axhline(
-                    0,
-                    color="black",
-                    linestyle="--",
-                    linewidth=1
-                )
-
-                ax.set_title(
-                    "Portfolio Cumulative Return",
-                    fontsize=18,
-                    fontweight="bold"
-                )
-
-                ax.set_xlabel("Date")
-                ax.set_ylabel("Cumulative Return (%)")
-
-                ax.grid(
-                    axis="y",
-                    linestyle=":",
-                    alpha=0.4
-                )
-
-                fig.autofmt_xdate()
-                fig.tight_layout()
-
-                st.pyplot(fig)
-                plt.close(fig)
-
-                # -----------------------------------------
-                # MONTHLY RETURNS
-                # -----------------------------------------
-
-                with st.expander(
-                    "View Portfolio Monthly Returns"
-                ):
-
-                    st.dataframe(
-                        portfolio_returns.to_frame(
-                            "Portfolio Return (%)"
-                        ).round(4),
-                        use_container_width=True
+                    selected_label = st.selectbox(
+                        f"Select Fund {i + 1}",
+                        labels,
+                        key=f"fund_{i}"
                     )
 
-                # -----------------------------------------
-                # FACTOR ANALYSIS
-                # -----------------------------------------
+                    code = (
+                        None
+                        if selected_label == "No fund"
+                        else options[selected_label]
+                    )
 
-                result = run_factor_analysis(
-                    portfolio_returns,
-                    model_key,
-                    "Portfolio"
+                else:
+
+                    code = None
+
+            with c3:
+
+                weight = st.number_input(
+                    "Weight %",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=0.0,
+                    step=0.5,
+                    key=f"weight_{i}"
                 )
 
-                # -----------------------------------------
-                # ROLLING
-                # -----------------------------------------
+            if code and weight > 0:
 
-                if result and rolling_months:
+                selected_portfolio.append(
+                    {
+                        "code": code,
+                        "weight": weight,
+                        "name": selected_label
+                    }
+                )
 
-                    run_rolling_regression(
-                        result["regression_df"],
-                        get_model_config(model_key)["factors"],
-                        rolling_months,
-                        "Portfolio"
-                    )
+        total_weight = sum(
+            x["weight"]
+            for x in selected_portfolio
+        )
+
+        if abs(total_weight - 100) < 0.001:
+
+            st.success(
+                f"Total Portfolio Weight: {total_weight:.1f}% ✓"
+            )
 
         else:
 
-            st.warning(
-                "The selected funds do not have a common "
-                "month-end history."
+            st.error(
+                f"Total Portfolio Weight: {total_weight:.1f}% "
+                f"— must equal 100%"
             )
 
-    else:
+        # -----------------------------------------------------
+        # COMMON DATES
+        # -----------------------------------------------------
 
-        st.caption(
-            "Select at least one fund to see the common history."
-        )
+        codes = [
+            x["code"]
+            for x in selected_portfolio
+        ]
+
+        if codes:
+
+            common_dates = get_common_month_end_dates(codes)
+
+            if common_dates:
+
+                st.write(
+                    f"**Common history:** "
+                    f"{common_dates[0].strftime('%b %Y')} "
+                    f"to "
+                    f"{common_dates[-1].strftime('%b %Y')}"
+                )
+
+                d1, d2 = st.columns(2)
+
+                with d1:
+
+                    start_date = st.selectbox(
+                        "Start Date",
+                        common_dates,
+                        format_func=lambda x: x.strftime("%b %Y"),
+                        index=0,
+                        key="portfolio_start"
+                    )
+
+                with d2:
+
+                    end_date = st.selectbox(
+                        "End Date",
+                        common_dates,
+                        format_func=lambda x: x.strftime("%b %Y"),
+                        index=len(common_dates) - 1,
+                        key="portfolio_end"
+                    )
+
+                if st.button(
+                    "Run Portfolio Analysis",
+                    type="primary"
+                ):
+
+                    if abs(total_weight - 100) > 0.001:
+
+                        st.error(
+                            "Portfolio weights must total exactly 100%."
+                        )
+                        st.stop()
+
+                    if start_date >= end_date:
+
+                        st.error(
+                            "Start Date must be before End Date."
+                        )
+                        st.stop()
+
+                    returns_list = []
+
+                    for item in selected_portfolio:
+
+                        returns = get_monthly_returns(
+                            item["code"],
+                            start_date,
+                            end_date
+                        )
+
+                        if returns.empty:
+
+                            st.error(
+                                f"No return data available for "
+                                f"{item['name']}."
+                            )
+                            st.stop()
+
+                        returns_list.append(
+                            returns.rename(
+                                item["code"]
+                            )
+                        )
+
+                    returns_df = pd.concat(
+                        returns_list,
+                        axis=1
+                    ).dropna()
+
+                    if returns_df.empty:
+
+                        st.error(
+                            "No common monthly return observations "
+                            "are available."
+                        )
+                        st.stop()
+
+                    # -----------------------------------------
+                    # CALCULATE PORTFOLIO RETURNS
+                    # -----------------------------------------
+
+                    weights = {
+                        x["code"]: x["weight"] / 100
+                        for x in selected_portfolio
+                    }
+
+                    portfolio_returns = pd.Series(
+                        0.0,
+                        index=returns_df.index
+                    )
+
+                    for code, weight in weights.items():
+
+                        portfolio_returns += (
+                            returns_df[code]
+                            * weight
+                        )
+
+                    portfolio_returns.name = (
+                        "Portfolio Return"
+                    )
+
+                    # -----------------------------------------
+                    # PORTFOLIO SUMMARY
+                    # -----------------------------------------
+
+                    st.subheader("Portfolio")
+
+                    portfolio_table = pd.DataFrame([
+                        {
+                            "Fund": x["name"],
+                            "Weight": x["weight"]
+                        }
+                        for x in selected_portfolio
+                    ])
+
+                    st.dataframe(
+                        portfolio_table.style.format({
+                            "Weight": "{:.1f}%"
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    # -----------------------------------------
+                    # CUMULATIVE RETURN
+                    # -----------------------------------------
+
+                    cumulative = (
+                        (1 + portfolio_returns / 100)
+                        .cumprod()
+                        - 1
+                    ) * 100
+
+                    fig, ax = plt.subplots(figsize=(12, 5))
+
+                    ax.plot(
+                        cumulative.index,
+                        cumulative.values,
+                        linewidth=2
+                    )
+
+                    ax.axhline(
+                        0,
+                        color="black",
+                        linestyle="--",
+                        linewidth=1
+                    )
+
+                    ax.set_title(
+                        "Portfolio Cumulative Return",
+                        fontsize=18,
+                        fontweight="bold"
+                    )
+
+                    ax.set_xlabel("Date")
+                    ax.set_ylabel("Cumulative Return (%)")
+
+                    ax.grid(
+                        axis="y",
+                        linestyle=":",
+                        alpha=0.4
+                    )
+
+                    fig.autofmt_xdate()
+                    fig.tight_layout()
+
+                    st.pyplot(fig)
+                    plt.close(fig)
+
+                    # -----------------------------------------
+                    # MONTHLY RETURNS
+                    # -----------------------------------------
+
+                    with st.expander(
+                        "View Portfolio Monthly Returns"
+                    ):
+
+                        st.dataframe(
+                            portfolio_returns.to_frame(
+                                "Portfolio Return (%)"
+                            ).round(4),
+                            use_container_width=True
+                        )
+
+                    # -----------------------------------------
+                    # FACTOR ANALYSIS
+                    # -----------------------------------------
+
+                    result = run_factor_analysis(
+                        portfolio_returns,
+                        model_key,
+                        "Portfolio"
+                    )
+
+                    # -----------------------------------------
+                    # ROLLING
+                    # -----------------------------------------
+
+                    if result and rolling_months:
+
+                        run_rolling_regression(
+                            result["regression_df"],
+                            get_model_config(model_key)["factors"],
+                            rolling_months,
+                            "Portfolio"
+                        )
+
+            else:
+
+                st.warning(
+                    "The selected funds do not have a common "
+                    "month-end history."
+                )
+
+        else:
+
+            st.caption(
+                "Select at least one fund to see the common history."
+            )
