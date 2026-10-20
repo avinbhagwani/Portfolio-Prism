@@ -13,7 +13,7 @@ import streamlit as st
 from views import factor_analysis, factor_indexes, drawdown_analysis, coming_soon
 
 st.set_page_config(
-    page_title="Factor Analysis",
+    page_title="PRISM",
     page_icon="📊",
     layout="wide"
 )
@@ -32,7 +32,7 @@ NAV_ITEMS = [
     {
         "key": "efficient_frontier",
         "label": "Efficient Frontier",
-        "badge": "Under Development"
+        "badge": "Soon"
     },
 ]
 
@@ -65,11 +65,6 @@ st.markdown(
         border-color: rgba(128, 128, 128, 0.25);
         opacity: 1;
     }
-    div[data-testid="stSidebar"] button[kind="primary"] {
-        background-color: #2563eb;
-        border-color: #2563eb;
-        box-shadow: 0 1px 3px rgba(37, 99, 235, 0.35);
-    }
     </style>
     """,
     unsafe_allow_html=True
@@ -96,7 +91,7 @@ nav_page = st.session_state.nav_page
 st.sidebar.markdown("---")
 st.sidebar.caption(
     "Have a question, found a bug, or want to suggest a feature? "
-    "Reach out anytime — "
+    "Reach out anytime: "
     "[connect on LinkedIn](https://www.linkedin.com/in/avinbhagwani69/) "
     "or drop me a line at avinbhagwani69@gmail.com."
 )
