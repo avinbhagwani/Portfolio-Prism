@@ -181,7 +181,7 @@ def _render_returns_tab(levels, selected):
         with st.expander("View annual returns table"):
             st.dataframe(
                 annual_df.style.format("{:.2f}"),
-                use_container_width=True
+                width="stretch"
             )
 
     st.subheader("Rolling Returns")
@@ -208,7 +208,7 @@ def _render_returns_tab(levels, selected):
     plt.close(fig)
 
     with st.expander("View rolling returns table"):
-        st.dataframe(rolling_df.round(2), use_container_width=True)
+        st.dataframe(rolling_df.round(2), width="stretch")
 
     if len(selected) == 2:
         index_a, index_b = selected
@@ -294,7 +294,7 @@ def _render_risk_tab(levels, selected):
                 "Current Drawdown (%)": "{:.2f}",
                 "Max Drawdown Date": lambda d: d.strftime("%d %b %Y"),
             }),
-            use_container_width=True
+            width="stretch"
         )
 
         with st.expander("Worst drawdown episodes"):
@@ -321,7 +321,7 @@ def _render_risk_tab(levels, selected):
                     for ep in episodes
                 ]
 
-                st.dataframe(rows, use_container_width=True, hide_index=True)
+                st.dataframe(rows, width="stretch", hide_index=True)
 
     st.subheader("Rolling Volatility")
 
@@ -346,7 +346,7 @@ def _render_risk_tab(levels, selected):
         plt.close(fig)
 
         with st.expander("View rolling volatility table"):
-            st.dataframe(vol_df.round(2), use_container_width=True)
+            st.dataframe(vol_df.round(2), width="stretch")
 
     st.subheader("Upside / Downside Capture")
     st.caption(
@@ -414,7 +414,7 @@ def _render_risk_tab(levels, selected):
             "Up Months": "{:.0f}",
             "Down Months": "{:.0f}",
         }),
-        use_container_width=True
+        width="stretch"
     )
 
 
@@ -487,7 +487,7 @@ def _render_scatter_tab():
                 "Volatility": "{:.2f}",
                 "Observations": "{:.0f}",
             }),
-            use_container_width=True
+            width="stretch"
         )
 
 
@@ -634,5 +634,5 @@ def _render_quilt_tab():
     with st.expander("View underlying annual returns table"):
         st.dataframe(
             annual_df.loc[start_year:end_year].style.format("{:.2f}"),
-            use_container_width=True
+            width="stretch"
         )

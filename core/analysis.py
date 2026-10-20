@@ -92,7 +92,7 @@ def run_factor_analysis(return_series, model_key, analysis_name):
             "t-stat": "{:.4f}",
             "P-value": "{:.4f}"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -264,7 +264,7 @@ def run_rolling_regression(
     st.write("Rolling Regression Results")
     st.dataframe(
         rolling_df.round(4),
-        use_container_width=True
+        width="stretch"
     )
 
     return rolling_df
