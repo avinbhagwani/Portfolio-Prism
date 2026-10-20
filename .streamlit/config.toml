@@ -1,0 +1,42 @@
+[server]
+enableStaticServing = true
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#1F4E79"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6F8"
+textColor = "#1B2533"
+linkColor = "#1F4E79"
+borderColor = "#E3E7EC"
+showWidgetBorder = false
+baseRadius = "6px"
+font = "Inter, sans-serif"
+headingFont = "Inter, sans-serif"
+headingFontWeights = [600, 600, 600, 600, 600, 600]
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-Regular.otf"
+weight = 400
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-Medium.otf"
+weight = 500
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-SemiBold.otf"
+weight = 600
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/Inter-Bold.otf"
+weight = 700
+
+[theme.sidebar]
+backgroundColor = "#F4F6F8"
