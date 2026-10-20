@@ -4,32 +4,32 @@ FBI Intelligence (Factor-Based Index Intelligence).
 Built around one question a visitor arrives with: "how has this index
 behaved, against the market and against the alternative I'm weighing?"
 
-  Controls (top, shared by every tab): index, optional second index,
-  benchmark, period.
+  Controls card (shared by every tab): index, compare with, benchmark,
+  period.
 
-  Overview    headline, five key numbers, growth of Rs 1 lakh
+  Overview    headline finding, one number card per index, growth of
+              Rs 1 lakh
   Returns     rolling returns with hit rate, calendar years
   Risk        drawdowns with the worst episode, upside/downside capture
   Market map  every index in a category by risk and return, and the
-              year-by-year quilt
+              year-by-year quilt (original quilt style, by request)
 
-Each chart leads with one sentence computed from the data, so the page
-says what it shows instead of only labelling it.
+Charts are interactive Vega-Lite (hover for exact values). Each one
+leads with a sentence computed from the data.
 """
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 
-from charts import fbi_charts as fc
+from charts import fbi_vega as fv
+from charts.quilt_chart import build_quilt_color_map, make_quilt_chart
 from charts.render import show_figure
 from core import fbi_metrics as fm
-from charts.quilt_chart import build_quilt_color_map, make_quilt_chart
 from core.index_analytics import build_quilt
 
 DEFAULT_A = "NIFTY200 MOMENTUM 30"
 DEFAULT_B = "NIFTY500 VALUE 50"
-DEFAULT_BENCH = "NIFTY 500"
 BENCH_CHOICES = [
     "NIFTY 500", "NIFTY 50", "NIFTY 100", "NIFTY 200",
     "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250", "NIFTY TOTAL MARKET",
@@ -54,25 +54,39 @@ QUILT_PRESETS = {
 
 CSS = """
 <style>
-.fbi-sub {color:#6B7480; font-size:0.95rem; margin:-0.6rem 0 1.4rem 0;}
-.fbi-headline {font-size:1.22rem; line-height:1.5; font-weight:500;
-  color:#1B2533; margin:0.4rem 0 0.2rem 0; max-width:52rem;}
-.fbi-label {font-size:0.8rem; color:#6B7480; font-weight:500;
-  margin:1.6rem 0 0.1rem 0; letter-spacing:0.01em;}
-.fbi-note {font-size:0.82rem; color:#8A939E; margin-top:0.2rem;}
-table.fbi-stats {border-collapse:collapse; width:100%; margin:1rem 0 0.4rem 0;
-  font-size:0.92rem; border:none !important;}
-table.fbi-stats th, table.fbi-stats td {border-left:none !important;
-  border-right:none !important; border-top:none !important;}
-table.fbi-stats th {font-weight:500; color:#6B7480; text-align:right;
-  padding:0.45rem 0.6rem; border-bottom:1px solid #E3E7EC;}
-table.fbi-stats th:first-child, table.fbi-stats td:first-child {text-align:left;}
-table.fbi-stats td {padding:0.55rem 0.6rem; text-align:right;
-  border-bottom:1px solid #F0F2F5; font-variant-numeric:tabular-nums;}
-table.fbi-stats td:first-child {color:#6B7480;}
-.dot {display:inline-block; width:0.6rem; height:0.6rem; border-radius:50%;
-  margin-right:0.4rem; vertical-align:0.05rem;}
-div[data-testid="stTabs"] button p {font-size:0.95rem;}
+.fbi-eyebrow {font-size:0.78rem; letter-spacing:0.08em; text-transform:uppercase;
+  color:#1F4E79; font-weight:600; margin:0 0 0.35rem 0;}
+.fbi-title {font-size:2.1rem; font-weight:600; color:#1B2533; line-height:1.15;
+  margin:0 0 0.5rem 0; letter-spacing:-0.01em;}
+.fbi-sub {color:#6B7480; font-size:1rem; margin:0 0 1.6rem 0; max-width:46rem;}
+.fbi-headline {font-size:1.45rem; line-height:1.45; font-weight:500;
+  color:#1B2533; margin:1.2rem 0 0.4rem 0; max-width:54rem; letter-spacing:-0.005em;}
+.fbi-headline b {font-weight:600;}
+.fbi-label {font-size:0.82rem; color:#6B7480; font-weight:500;
+  margin:1.8rem 0 0.2rem 0;}
+.fbi-note {font-size:0.84rem; color:#8A939E; margin:0.2rem 0 0 0; max-width:54rem;}
+.fbi-section {height:1px; background:#ECEFF2; margin:2.6rem 0 0.4rem 0;}
+
+.kpi-row {display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+  gap:16px; margin:1.4rem 0 0.6rem 0;}
+.kpi {border:1px solid #E6E9ED; border-top:3px solid var(--c); border-radius:10px;
+  padding:16px 20px 18px 20px; background:#fff;}
+.kpi-name {font-size:0.9rem; color:#1B2533; font-weight:500; margin-bottom:10px;}
+.kpi-big {font-size:2.3rem; font-weight:600; color:#1B2533; line-height:1.05;
+  font-variant-numeric:tabular-nums; letter-spacing:-0.02em;}
+.kpi-big span {font-size:0.9rem; font-weight:400; color:#8A939E; margin-left:6px;
+  letter-spacing:0;}
+.kpi-delta {font-size:0.86rem; font-weight:500; margin:6px 0 14px 0;}
+.kpi-delta.pos {color:#2E7D4F;} .kpi-delta.neg {color:#B54A3C;}
+.kpi-delta.flat {color:#8A939E;}
+.kpi-meta {display:flex; gap:22px; border-top:1px solid #F0F2F5; padding-top:12px;}
+.kpi-meta b {display:block; font-size:0.98rem; font-weight:600; color:#1B2533;
+  font-variant-numeric:tabular-nums;}
+.kpi-meta small {font-size:0.76rem; color:#8A939E;}
+
+div[data-testid="stTabs"] [data-baseweb="tab-list"] {gap:1.6rem;}
+div[data-testid="stTabs"] button p {font-size:1rem; font-weight:500;}
+.fbi-source {font-size:0.8rem; color:#9AA3AE; margin-top:2.2rem;}
 </style>
 """
 
@@ -83,10 +97,12 @@ div[data-testid="stTabs"] button p {font-size:0.95rem;}
 
 def render():
     st.markdown(CSS, unsafe_allow_html=True)
-    st.title("FBI Intelligence")
     st.markdown(
-        "<p class='fbi-sub'>Factor-based index intelligence. Compare Nifty "
-        "factor and strategy indices on return, risk and consistency.</p>",
+        "<div class='fbi-eyebrow'>FBI Intelligence</div>"
+        "<div class='fbi-title'>How has a factor index really behaved?</div>"
+        "<div class='fbi-sub'>Compare Nifty factor and strategy indices against "
+        "the market and each other: return, risk and how consistent they "
+        "have been.</div>",
         unsafe_allow_html=True,
     )
 
@@ -94,21 +110,24 @@ def render():
     names = universe["indexName"].tolist()
     display = dict(zip(universe["indexName"], universe["display"]))
 
-    c1, c2, c3, c4 = st.columns([2.6, 2.6, 1.9, 2.9], vertical_alignment="bottom")
-    with c1:
-        a = st.selectbox("Index", names, index=names.index(DEFAULT_A),
-                         format_func=display.get, key="fbi_a")
-    with c2:
-        b_opts = [NONE] + names
-        b = st.selectbox("Compare with", b_opts,
-                         index=b_opts.index(DEFAULT_B),
-                         format_func=lambda n: display.get(n, n), key="fbi_b")
-    with c3:
-        bench = st.selectbox("Benchmark", BENCH_CHOICES,
-                             format_func=display.get, key="fbi_bench")
-    with c4:
-        period = st.segmented_control("Period", list(fm.PERIODS),
-                                      default="5Y", key="fbi_period")
+    with st.container(border=True):
+        c1, c2, c3, c4 = st.columns([2.6, 2.6, 1.9, 2.9],
+                                    vertical_alignment="bottom")
+        with c1:
+            a = st.selectbox("Index", names, index=names.index(DEFAULT_A),
+                             format_func=display.get, key="fbi_a")
+        with c2:
+            b_opts = [NONE] + names
+            b = st.selectbox("Compare with", b_opts,
+                             index=b_opts.index(DEFAULT_B),
+                             format_func=lambda n: display.get(n, n), key="fbi_b")
+        with c3:
+            bench = st.selectbox("Benchmark", BENCH_CHOICES,
+                                 format_func=display.get, key="fbi_bench")
+        with c4:
+            period = st.segmented_control("Period", list(fm.PERIODS),
+                                          default="5Y", key="fbi_period",
+                                          width="stretch")
     period = period or "5Y"
     years = fm.PERIODS[period]
 
@@ -129,7 +148,6 @@ def render():
                phrase=phrase, picks=picks, bench=bench, names=names_all,
                as_of=as_of, years=years, period=period)
 
-    st.write("")
     t1, t2, t3, t4 = st.tabs(["Overview", "Returns", "Risk", "Market map"])
     with t1:
         _overview(ctx)
@@ -140,6 +158,12 @@ def render():
     with t4:
         _market_map(ctx, universe)
 
+    _methodology(as_of)
+
+
+# =====================================================================
+# Small helpers
+# =====================================================================
 
 def _headline(text):
     st.markdown(f"<p class='fbi-headline'>{text}</p>", unsafe_allow_html=True)
@@ -153,9 +177,12 @@ def _note(text):
     st.markdown(f"<p class='fbi-note'>{text}</p>", unsafe_allow_html=True)
 
 
-def _show(fig):
-    show_figure(fig)
-    plt.close(fig)
+def _section():
+    st.markdown("<div class='fbi-section'></div>", unsafe_allow_html=True)
+
+
+def _chart(chart):
+    st.altair_chart(chart, theme=None, width="stretch")
 
 
 def _n(name):
@@ -164,8 +191,8 @@ def _n(name):
 
 def _color(ctx, name):
     if name == ctx["bench"]:
-        return fc.COLOR_BENCH
-    return fc.SERIES_COLORS[ctx["picks"].index(name)]
+        return fv.COLOR_BENCH
+    return fv.SERIES_COLORS[ctx["picks"].index(name)]
 
 
 def _shortened_note(ctx):
@@ -191,7 +218,7 @@ def _overview(ctx):
         better = diff >= 0
         deeper = dd[a] < dd[bench] - 1
         shallower = dd[a] > dd[bench] + 1
-        text = (f"{phrase}, {_n(a)} returned {fm.fmt_pct(r[a])} a year, "
+        text = (f"{phrase}, <b>{_n(a)}</b> returned {fm.fmt_pct(r[a])} a year, "
                 f"{fm.fmt_pts(diff)} {'more' if better else 'less'} than the "
                 f"{_n(bench)}")
         if deeper or shallower:
@@ -204,48 +231,51 @@ def _overview(ctx):
         b = picks[1]
         lead, lag = (a, b) if r[a] >= r[b] else (b, a)
         beat = [p for p in picks if r[p] > r[bench]]
-        text = (f"{phrase}, {_n(lead)} returned {fm.fmt_pct(r[lead])} a year "
-                f"against {fm.fmt_pct(r[lag])} for {_n(lag)}")
+        text = (f"{phrase}, <b>{_n(lead)}</b> returned {fm.fmt_pct(r[lead])} a "
+                f"year against {fm.fmt_pct(r[lag])} for {_n(lag)}")
         if len(beat) == 2:
             text += f". Both beat the {_n(bench)} ({fm.fmt_pct(r[bench])})."
         elif len(beat) == 1:
-            text += (f", which trailed the {_n(bench)} "
-                     f"({fm.fmt_pct(r[bench])}).")
+            text += f", which trailed the {_n(bench)} ({fm.fmt_pct(r[bench])})."
         else:
             text += f". Neither beat the {_n(bench)} ({fm.fmt_pct(r[bench])})."
     _headline(text)
     _shortened_note(ctx)
 
-    _stats_html(ctx, stats)
+    _kpi_cards(ctx, stats)
 
     _label("Growth of ₹1 lakh")
-    _show(fc.growth_chart(w, ctx["names"], bench, ctx["as_of"]))
+    _chart(fv.growth_chart(w, ctx["names"], bench))
 
 
-def _stats_html(ctx, stats):
-    cols = ctx["names"]
-    head = "".join(
-        f"<th><span class='dot' style='background:{_color(ctx, n)}'></span>{_n(n)}</th>"
-        for n in cols
-    )
-    rows = []
-    fmt = {
-        "Annual return": lambda v: fm.fmt_pct(v),
-        "Volatility": lambda v: fm.fmt_pct(v),
-        "Worst fall": lambda v: fm.fmt_pct(v),
-        "Upside capture": lambda v: f"{v:.0f}%",
-        "Downside capture": lambda v: f"{v:.0f}%",
-    }
-    for metric in stats.index:
-        cells = "".join(f"<td>{fmt[metric](stats.loc[metric, n])}</td>" for n in cols)
-        rows.append(f"<tr><td>{metric}</td>{cells}</tr>")
-    st.markdown(
-        f"<table class='fbi-stats'><tr><th></th>{head}</tr>{''.join(rows)}</table>",
-        unsafe_allow_html=True,
-    )
-    _note("Annual return is compound (CAGR). Capture compares each month the "
-          f"{_n(ctx['bench'])} rose or fell; above 100% upside and below 100% "
-          "downside are better.")
+def _kpi_cards(ctx, stats):
+    bench = ctx["bench"]
+    cards = []
+    for n in ctx["names"]:
+        s = stats[n]
+        if n == bench:
+            delta = "<div class='kpi-delta flat'>Benchmark</div>"
+            cap = "100 / 100"
+        else:
+            d = s["Annual return"] - stats[bench]["Annual return"]
+            cls = "pos" if d > 0.05 else "neg" if d < -0.05 else "flat"
+            sign = "+" if d >= 0 else "−"
+            delta = (f"<div class='kpi-delta {cls}'>{sign}{abs(d):.1f} pts a year "
+                     f"vs {_n(bench)}</div>")
+            cap = f"{s['Upside capture']:.0f} / {s['Downside capture']:.0f}"
+        cards.append(
+            f"<div class='kpi' style='--c:{_color(ctx, n)}'>"
+            f"<div class='kpi-name'>{_n(n)}</div>"
+            f"<div class='kpi-big'>{fm.fmt_pct(s['Annual return'])}<span>a year</span></div>"
+            f"{delta}"
+            f"<div class='kpi-meta'>"
+            f"<div><b>{fm.fmt_pct(s['Volatility'])}</b><small>Volatility</small></div>"
+            f"<div><b>{fm.fmt_pct(s['Worst fall'])}</b><small>Worst fall</small></div>"
+            f"<div><b>{cap}</b><small>Capture up / down</small></div>"
+            f"</div></div>"
+        )
+    st.markdown(f"<div class='kpi-row'>{''.join(cards)}</div>",
+                unsafe_allow_html=True)
 
 
 # =====================================================================
@@ -254,11 +284,13 @@ def _stats_html(ctx, stats):
 
 def _returns(ctx):
     levels, picks, bench = ctx["levels"], ctx["picks"], ctx["bench"]
-
-    win_label = st.segmented_control("Rolling window", ["1Y", "3Y", "5Y"],
-                                     default="3Y", key="fbi_roll")
-    win = {"1Y": 1, "3Y": 3, "5Y": 5}[win_label or "3Y"]
     common = levels.loc[max(levels[c].first_valid_index() for c in levels.columns):]
+
+    _label("Rolling window")
+    win_label = st.segmented_control("Rolling window", ["1Y", "3Y", "5Y"],
+                                     default="3Y", key="fbi_roll",
+                                     label_visibility="collapsed")
+    win = {"1Y": 1, "3Y": 3, "5Y": 5}[win_label or "3Y"]
     rolling = fm.rolling_cagr(common, win).dropna()
 
     if rolling.empty:
@@ -267,8 +299,8 @@ def _returns(ctx):
         hr = {p: fm.hit_rate(rolling, p, bench) for p in picks}
         a = picks[0]
         med = hr[a]["median"]
-        text = (f"{_n(a)} beat the {_n(bench)} in {hr[a]['pct']:.0f}% of rolling "
-                f"{win}-year periods since {hr[a]['since']:%Y}, "
+        text = (f"<b>{_n(a)}</b> beat the {_n(bench)} in {hr[a]['pct']:.0f}% of "
+                f"rolling {win}-year periods since {hr[a]['since']:%Y}, "
                 f"{'leading' if med >= 0 else 'trailing'} by a median of "
                 f"{abs(med):.1f} points a year.")
         if len(picks) == 2:
@@ -278,7 +310,7 @@ def _returns(ctx):
                      f"each other, {_n(a)} led in {vs['pct']:.0f}% of periods.")
         _headline(text)
         _label(f"Rolling {win}-year return, annualised")
-        _show(fc.rolling_chart(rolling, ctx["names"], bench, ctx["as_of"]))
+        _chart(fv.rolling_chart(rolling, ctx["names"], bench))
         _note("Consecutive rolling periods overlap heavily, so read these "
               "percentages as a guide rather than proof.")
 
@@ -289,11 +321,11 @@ def _returns(ctx):
     shown = cal.loc[full.index.min():]
     a = picks[0]
     wins = int((full[a] > full[bench]).sum())
-    st.write("")
-    _headline(f"{_n(a)} beat the {_n(bench)} in {wins} of the last "
+    _section()
+    _headline(f"<b>{_n(a)}</b> beat the {_n(bench)} in {wins} of the last "
               f"{len(full)} calendar years.")
     _label("Calendar-year return")
-    _show(fc.calendar_chart(shown, ctx["names"], bench, partial, ctx["as_of"]))
+    _chart(fv.calendar_chart(shown, ctx["names"], bench, partial))
 
 
 # =====================================================================
@@ -304,7 +336,7 @@ def _risk(ctx):
     w, picks, bench = ctx["window"], ctx["picks"], ctx["bench"]
     a = picks[0]
     ep = fm.worst_episode(w[a])
-    text = (f"{_n(a)}'s worst fall {ctx['phrase']} was "
+    text = (f"<b>{_n(a)}</b>'s worst fall {ctx['phrase']} was "
             f"{fm.fmt_pct(ep['depth'], decimals=0)}, from {ep['peak']:%b %Y} to "
             f"{ep['trough']:%b %Y}. ")
     if ep["recovery"] is not None:
@@ -316,22 +348,22 @@ def _risk(ctx):
     _headline(text)
     _shortened_note(ctx)
     _label("Fall from previous high")
-    _show(fc.drawdown_chart(w, ctx["names"], bench, ctx["as_of"]))
+    _chart(fv.drawdown_chart(w, ctx["names"], bench))
 
     pts = []
     for p in picks:
-        up, down, n_up, n_down = fm.capture(w, p, bench)
+        up, down, *_ = fm.capture(w, p, bench)
         pts.append((p, down, up, _color(ctx, p)))
     name, down, up, _ = pts[0]
-    text = (f"{_n(name)} captured {up:.0f}% of the {_n(bench)}'s gains and "
-            f"{down:.0f}% of its losses.")
+    text = (f"<b>{_n(name)}</b> captured {up:.0f}% of the {_n(bench)}'s gains "
+            f"and {down:.0f}% of its losses.")
     if len(pts) == 2:
         n2, d2, u2, _ = pts[1]
         text += f" {_n(n2)}: {u2:.0f}% of gains, {d2:.0f}% of losses."
-    st.write("")
+    _section()
     _headline(text)
     _label(f"Upside and downside capture against the {_n(bench)}")
-    _show(fc.capture_chart(pts, bench, ctx["as_of"]))
+    _chart(fv.capture_chart(pts, bench))
 
 
 # =====================================================================
@@ -339,18 +371,19 @@ def _risk(ctx):
 # =====================================================================
 
 def _market_map(ctx, universe):
-    view = st.segmented_control("View", ["Risk and return", "Year by year"],
-                                default="Risk and return", key="fbi_map_view")
+    c1, c2 = st.columns([1.2, 2], vertical_alignment="bottom")
+    with c1:
+        view = st.segmented_control("View", ["Risk and return", "Year by year"],
+                                    default="Risk and return", key="fbi_map_view")
     if (view or "Risk and return") == "Risk and return":
-        _scatter(ctx, universe)
+        _scatter(ctx, universe, c2)
     else:
-        _quilt(ctx, universe)
+        _quilt(ctx, universe, c2)
 
 
-def _scatter(ctx, universe):
+def _scatter(ctx, universe, slot):
     cats = sorted(universe["indexCategory"].unique())
-    col, _ = st.columns([1, 2])
-    with col:
+    with slot:
         cat = st.selectbox("Category", cats, index=cats.index("Strategy Indices"),
                            format_func=fm.short_category, key="fbi_map_cat")
     bench, years = ctx["bench"], ctx["years"]
@@ -377,22 +410,24 @@ def _scatter(ctx, universe):
     b = pts.loc[bench]
     beat = [n for n in in_cat if pts.loc[n, "Return"] > b["Return"]]
     calmer = [n for n in beat if pts.loc[n, "Volatility"] < b["Volatility"]]
-    phrase = ("since Apr 2005" if years is None else fm.period_phrase(years, start, False))
-    _headline(f"{len(beat)} of {len(in_cat)} {fm.short_category(cat).lower()} "
-              f"indices beat the {_n(bench)} {phrase}; {len(calmer)} of them "
-              f"did it with less volatility.")
-    top = pts.loc[in_cat].sort_values("Return", ascending=False).index[:3].tolist()
-    fig = fc.risk_return_chart(pts, bench, ctx["picks"], top, as_of)
-    _label("Annualised return against volatility")
-    _show(fig)
+    phrase = ("since Apr 2005" if years is None
+              else fm.period_phrase(years, start, False))
+    _headline(f"<b>{len(beat)} of {len(in_cat)}</b> "
+              f"{fm.short_category(cat).lower()} indices beat the {_n(bench)} "
+              f"{phrase}; {len(calmer)} of them did it with less volatility.")
+    top = pts.loc[in_cat].sort_values("Return", ascending=False).index[:2].tolist()
+    _label("Annualised return against volatility. Hover any dot for its name.")
+    _chart(fv.risk_return_chart(pts, bench, ctx["picks"], top))
     missing = len([n for n in members if n not in pts.index])
     if missing:
         _note(f"{missing} newer indices without the full history are left out.")
 
 
-def _quilt(ctx, universe):
-    preset = st.segmented_control("Set", list(QUILT_PRESETS),
-                                  default="Factors, Nifty 500", key="fbi_quilt_set")
+def _quilt(ctx, universe, slot):
+    with slot:
+        preset = st.segmented_control("Set", list(QUILT_PRESETS),
+                                      default="Factors, Nifty 500",
+                                      key="fbi_quilt_set")
     preset = preset or "Factors, Nifty 500"
     if QUILT_PRESETS[preset] is None:
         names = universe["indexName"].tolist()
@@ -413,15 +448,52 @@ def _quilt(ctx, universe):
     quilt = build_quilt(cal.loc[cols])
     leaders = quilt.iloc[0][[c for c in quilt.columns if c != partial]]
     unique = len({cell[0] for cell in leaders if cell})
-    _headline(f"Leadership keeps changing: {unique} different indices topped "
-              f"the table in the last {len(last_full)} years.")
+    _headline(f"Leadership keeps changing: <b>{unique} different indices</b> "
+              f"topped the table in the last {len(last_full)} years.")
     title_prefix = "Asset Allocation Quilt" if preset == "Custom" else preset
     with plt.rc_context({"font.family": "DejaVu Sans", "text.color": "black"}):
         fig = make_quilt_chart(
             quilt, build_quilt_color_map(chosen),
-            title=f"{title_prefix} ({cols[0]}\u2013{cols[-1]})",
+            title=f"{title_prefix} ({cols[0]}–{cols[-1]})",
         )
-    _show(fig)
+    show_figure(fig)
+    plt.close(fig)
     if partial:
         _note(f"{partial} is a partial year: the return shown is year to date, "
               f"to {levels.index.max():%d %b %Y}.")
+
+
+# =====================================================================
+# METHODOLOGY
+# =====================================================================
+
+def _methodology(as_of):
+    st.markdown(
+        f"<p class='fbi-source'>Source: NSE Indices via FinAPI. Total return "
+        f"indices in INR. Data to {as_of:%d %b %Y}.</p>",
+        unsafe_allow_html=True,
+    )
+    with st.expander("How these numbers are calculated"):
+        st.markdown(
+            "- **Total return.** Index levels include reinvested dividends. "
+            "Price-only, leveraged, inverse, futures and dollar versions are "
+            "left out so every comparison is like for like.\n"
+            "- **Complete months only.** Figures run to the last complete "
+            "month-end, so no statistic includes a partial month.\n"
+            "- **Same window for everyone.** A comparison starts only once "
+            "every index in it has data.\n"
+            "- **Annual return** is compound annual growth (CAGR). "
+            "**Volatility** is the standard deviation of monthly returns, "
+            "annualised. **Worst fall** is the largest drop from a previous "
+            "high, using daily data.\n"
+            "- **Upside and downside capture** follow Morningstar: the "
+            "annualised return in months the benchmark rose (or fell), "
+            "divided by the benchmark's annualised return in those months.\n"
+            "- **Rolling returns** overlap month to month, so hit rates "
+            "describe history rather than prove an edge.\n"
+            "- **Backtested history.** NSE calculates many factor indices "
+            "back to April 2005, before they launched. Returns before an "
+            "index's launch date are back-calculated, not live.\n"
+            "- Past performance does not guarantee future results. This is "
+            "not investment advice."
+        )

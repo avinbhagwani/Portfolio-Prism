@@ -1,11 +1,10 @@
 """
-PRISM entry point. Owns page config and the sidebar navigation only —
-every tool's actual UI lives in views/, imported and dispatched here.
+PRISM entry point: page config, the top navigation bar and the shared
+footer. Every tool's UI lives in views/.
 
 To add a new tool:
   1. Build it in views/<name>.py with a render() function.
-  2. Add an entry to NAV_ITEMS below.
-  3. Add a branch in the routing block at the bottom.
+  2. Add an st.Page entry to PAGES below.
 """
 
 import streamlit as st
@@ -14,100 +13,49 @@ from views import factor_analysis, factor_indexes, drawdown_analysis, coming_soo
 
 st.set_page_config(
     page_title="PRISM",
-    page_icon="📊",
-    layout="wide"
+    page_icon="static/prism-icon.svg",
+    layout="wide",
 )
 
-# =========================================================
-# PRISM NAVIGATION
-# =========================================================
-
-st.sidebar.title("PRISM")
-st.sidebar.markdown("---")
-
-NAV_ITEMS = [
-    {"key": "factor", "label": "Factor Analysis"},
-    {"key": "fbi", "label": "FBI Intelligence"},
-    {"key": "drawdown", "label": "Drawdown Analysis"},
-    {
-        "key": "efficient_frontier",
-        "label": "Efficient Frontier",
-        "badge": "Soon"
-    },
-]
-
-if "nav_page" not in st.session_state:
-    st.session_state.nav_page = "factor"
+st.logo("static/prism-logo.svg", size="large", icon_image="static/prism-logo.svg")
 
 st.markdown(
     """
     <style>
-    div[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]
-        div.stButton > button {
-        width: 100%;
-        justify-content: flex-start;
-        text-align: left;
-        border-radius: 10px;
-        padding: 0.55rem 0.9rem;
-        margin-bottom: 0.3rem;
-        font-weight: 500;
-        font-size: 0.92rem;
-        border: 1px solid transparent;
-        transition: background-color 0.15s ease, border-color 0.15s ease;
+    [data-testid="stMainBlockContainer"] {
+        max-width: 1180px; padding-top: 3.2rem; padding-bottom: 3rem;
     }
-    div[data-testid="stSidebar"] button[kind="secondary"] {
-        background-color: transparent;
-        color: inherit;
-        opacity: 0.85;
-    }
-    div[data-testid="stSidebar"] button[kind="secondary"]:hover {
-        background-color: rgba(128, 128, 128, 0.15);
-        border-color: rgba(128, 128, 128, 0.25);
-        opacity: 1;
-    }
+    [data-testid="stHeader"] {border-bottom: 1px solid #ECEFF2;}
+    .prism-footer {color:#8A939E; font-size:0.82rem; margin-top:3rem;
+        padding-top:1.2rem; border-top:1px solid #ECEFF2;}
+    .prism-footer a {color:#6B7480;}
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-for item in NAV_ITEMS:
-    is_active = st.session_state.nav_page == item["key"]
 
-    label = item["label"]
-    if item.get("badge"):
-        label += f"   ·  {item['badge']}"
-
-    if st.sidebar.button(
-        label,
-        key=f"nav_btn_{item['key']}",
-        type="primary" if is_active else "secondary",
-        width="stretch"
-    ):
-        st.session_state.nav_page = item["key"]
-        st.rerun()
-
-nav_page = st.session_state.nav_page
-
-st.sidebar.markdown("---")
-st.sidebar.caption(
-    "Have a question, found a bug, or want to suggest a feature? "
-    "Reach out anytime: "
-    "[connect on LinkedIn](https://www.linkedin.com/in/avinbhagwani69/) "
-    "or drop me a line at avinbhagwani69@gmail.com."
-)
-
-# =========================================================
-# ROUTING
-# =========================================================
-
-if nav_page == "fbi":
-    factor_indexes.render()
-
-elif nav_page == "drawdown":
-    drawdown_analysis.render()
-
-elif nav_page == "efficient_frontier":
+def _efficient_frontier():
     coming_soon.render("Efficient Frontier")
 
-else:
-    factor_analysis.render()
+
+PAGES = [
+    st.Page(factor_analysis.render, title="Factor Analysis",
+            url_path="factor-analysis", default=True),
+    st.Page(factor_indexes.render, title="FBI Intelligence",
+            url_path="fbi-intelligence"),
+    st.Page(drawdown_analysis.render, title="Drawdown Analysis",
+            url_path="drawdown-analysis"),
+    st.Page(_efficient_frontier, title="Efficient Frontier (soon)",
+            url_path="efficient-frontier"),
+]
+
+page = st.navigation(PAGES, position="top")
+page.run()
+
+st.markdown(
+    "<div class='prism-footer'>Questions, bugs or ideas? "
+    "<a href='https://www.linkedin.com/in/avinbhagwani69/'>Connect on LinkedIn</a> "
+    "or write to avinbhagwani69@gmail.com.</div>",
+    unsafe_allow_html=True,
+)
