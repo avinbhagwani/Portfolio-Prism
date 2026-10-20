@@ -24,6 +24,7 @@ import streamlit as st
 from charts import fbi_charts as fc
 from charts.render import show_figure
 from core import fbi_metrics as fm
+from charts.quilt_chart import build_quilt_color_map, make_quilt_chart
 from core.index_analytics import build_quilt
 
 DEFAULT_A = "NIFTY200 MOMENTUM 30"
@@ -414,7 +415,13 @@ def _quilt(ctx, universe):
     unique = len({cell[0] for cell in leaders if cell})
     _headline(f"Leadership keeps changing: {unique} different indices topped "
               f"the table in the last {len(last_full)} years.")
-    colors = {n: fc.QUILT_COLORS[i % len(fc.QUILT_COLORS)]
-              for i, n in enumerate([c for c in chosen if c != ctx["bench"]])}
-    _label("Calendar-year return, ranked best to worst")
-    _show(fc.quilt_chart(quilt, colors, partial, levels.index.max()))
+    title_prefix = "Asset Allocation Quilt" if preset == "Custom" else preset
+    with plt.rc_context({"font.family": "DejaVu Sans", "text.color": "black"}):
+        fig = make_quilt_chart(
+            quilt, build_quilt_color_map(chosen),
+            title=f"{title_prefix} ({cols[0]}\u2013{cols[-1]})",
+        )
+    _show(fig)
+    if partial:
+        _note(f"{partial} is a partial year: the return shown is year to date, "
+              f"to {levels.index.max():%d %b %Y}.")
