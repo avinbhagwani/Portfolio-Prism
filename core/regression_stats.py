@@ -8,10 +8,35 @@ validation rather than pure calculation.
 """
 
 import pandas as pd
+import statsmodels.api as sm
 import streamlit as st
 
 from core.config import get_model_config
 from core.data import load_factor_data
+
+
+def newey_west_lags(n_obs):
+    """
+    Newey-West (1994) rule-of-thumb lag length: floor(4 * (T/100)^(2/9)).
+    Gives 2 lags for a 12-month window, 3 for 36 months, 4 for 120.
+    """
+    return max(1, int(4 * (n_obs / 100) ** (2 / 9)))
+
+
+def fit_factor_model(y, X):
+    """
+    OLS with Newey-West (HAC) standard errors.
+
+    Coefficients are identical to plain OLS; only the standard errors,
+    t-stats and p-values change. Monthly fund returns are typically
+    autocorrelated and heteroskedastic, which makes plain OLS standard
+    errors too small and the significance stars too generous. HAC
+    errors are the standard choice for factor regressions.
+    """
+    return sm.OLS(y, X).fit(
+        cov_type="HAC",
+        cov_kwds={"maxlags": newey_west_lags(len(y))}
+    )
 
 
 def significance_stars(p):

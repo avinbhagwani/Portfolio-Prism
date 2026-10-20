@@ -137,13 +137,40 @@ def load_factor_data(model_key):
 
 
 def month_end_dates(df):
+    """
+    One calendar month-end date for every month the fund has NAV data.
+
+    NAVs are only published on business days, so the literal last day
+    of the month (e.g. a Saturday or Sunday) often has no NAV. Checking
+    for the exact calendar month-end used to silently drop those months
+    from the date pickers. Instead, every month with at least one NAV is
+    kept, labelled by its calendar month-end — which is exactly how
+    get_monthly_returns() buckets returns via resample("ME").last().
+
+    The latest month is dropped if it isn't complete yet (the last NAV
+    is before that month's last business day), so a partial month is
+    never offered as an end date.
+    """
     if df.empty:
         return []
 
-    dates = pd.to_datetime(df["date"])
-    dates = dates[dates.dt.is_month_end]
+    dates = pd.to_datetime(df["date"]).dropna()
 
-    return sorted(pd.to_datetime(dates.unique()))
+    if dates.empty:
+        return []
+
+    month_ends = sorted(
+        pd.Timestamp(p.end_time.normalize())
+        for p in dates.dt.to_period("M").unique()
+    )
+
+    last_date = dates.max().normalize()
+    last_business_day = pd.offsets.BMonthEnd().rollforward(last_date)
+
+    if last_date < last_business_day:
+        month_ends = month_ends[:-1]
+
+    return month_ends
 
 
 def get_common_month_end_dates(codes):
