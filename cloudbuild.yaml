@@ -27,6 +27,10 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
+      # 512 MiB (the default) is too small: Python + pandas + statsmodels
+      # + matplotlib alone take ~250 MB, and chart rendering adds more.
+      - '--memory'
+      - '1Gi'
 
 options:
   logging: CLOUD_LOGGING_ONLY

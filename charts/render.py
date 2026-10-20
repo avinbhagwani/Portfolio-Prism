@@ -28,8 +28,32 @@ import streamlit as st
 
 DEFAULT_DPI = 300
 
+# Upper bounds on the rendered PNG. A chart is shown at most ~1,200 CSS
+# px wide, so 3,000 px is still ~2.5x that (sharp on retina screens).
+# Without a cap, wide figures like a full-history Quilt (54 inches wide)
+# rendered at 300 dpi became 16,000+ px images costing ~200 MB of RAM
+# each, which crashed the 512 MiB Cloud Run container and reset users
+# back to the Factor Analysis page.
+MAX_WIDTH_PX = 3000
+MAX_TOTAL_PX = 9_000_000
+
+
+def capped_dpi(fig, dpi=DEFAULT_DPI):
+    """Largest dpi <= `dpi` that keeps the PNG within the pixel caps."""
+    width_in, height_in = fig.get_size_inches()
+    by_width = MAX_WIDTH_PX / width_in
+    by_area = (MAX_TOTAL_PX / (width_in * height_in)) ** 0.5
+    return max(50, min(dpi, by_width, by_area))
+
 
 def show_figure(fig, dpi=DEFAULT_DPI):
+    dpi = capped_dpi(fig, dpi)
+
+    # bbox_inches="tight" does an extra draw pass at the figure's own
+    # dpi (the Quilt sets 220), so align it too, or that pass alone
+    # allocates a huge canvas before the capped save even starts.
+    fig.set_dpi(dpi)
+
     buf = io.BytesIO()
     fig.savefig(
         buf,
