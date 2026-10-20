@@ -86,7 +86,7 @@ for item in NAV_ITEMS:
         label,
         key=f"nav_btn_{item['key']}",
         type="primary" if is_active else "secondary",
-        use_container_width=True
+        width="stretch"
     ):
         st.session_state.nav_page = item["key"]
         st.rerun()

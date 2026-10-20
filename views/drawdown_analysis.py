@@ -79,7 +79,7 @@ def render():
             "Current Drawdown (%)": "{:.2f}",
             "Max Drawdown Date": lambda d: d.strftime("%d %b %Y"),
         }),
-        use_container_width=True
+        width="stretch"
     )
 
     # =========================================================
@@ -110,4 +110,4 @@ def render():
                 ),
             })
 
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)

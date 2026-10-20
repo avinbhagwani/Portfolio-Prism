@@ -477,7 +477,7 @@ def render():
                                 portfolio_table.style.format({
                                     "Weight": "{:.1f}%"
                                 }),
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True
                             )
 
@@ -541,7 +541,7 @@ def render():
                                     portfolio_returns.to_frame(
                                         "Portfolio Return (%)"
                                     ).round(4),
-                                    use_container_width=True
+                                    width="stretch"
                                 )
 
                             # -----------------------------------------
