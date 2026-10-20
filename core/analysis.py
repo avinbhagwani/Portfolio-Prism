@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 
 from core.config import FACTOR_LABELS, get_model_config
 from core.regression_stats import (
+    fit_factor_model,
+    newey_west_lags,
     prepare_regression_data,
     significance_stars,
     significance_text,
@@ -43,7 +45,7 @@ def run_factor_analysis(return_series, model_key, analysis_name):
     )
     y = regression_df["Excess_Fund_Return"]
 
-    model = sm.OLS(y, X).fit()
+    model = fit_factor_model(y, X)
 
     st.subheader(f"{analysis_name} — Factor Analysis")
 
@@ -63,7 +65,9 @@ def run_factor_analysis(return_series, model_key, analysis_name):
 
     st.caption(
         f"Alpha significance: {significance_text(alpha_p)} "
-        f"(p = {alpha_p:.4f})"
+        f"(p = {alpha_p:.4f}). Standard errors are Newey-West (HAC) "
+        f"with {newey_west_lags(len(regression_df))} lags, which adjust "
+        f"for autocorrelation in monthly returns."
     )
 
     # Include Alpha (the regression constant) alongside the factors so it
@@ -198,7 +202,7 @@ def run_rolling_regression(
         y = window["Excess_Fund_Return"]
 
         try:
-            model = sm.OLS(y, X).fit()
+            model = fit_factor_model(y, X)
         except Exception:
             continue
 
