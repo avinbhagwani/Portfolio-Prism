@@ -7,17 +7,22 @@ To add a new tool:
   2. Add an st.Page entry to PAGES below.
 """
 
+from pathlib import Path
+
 import streamlit as st
 
 from views import factor_analysis, factor_indexes, drawdown_analysis, coming_soon, intro
 
+STATIC = Path(__file__).resolve().parent / "static"
+
 st.set_page_config(
     page_title="PRISM",
-    page_icon="static/prism-icon.svg",
+    page_icon=str(STATIC / "prism-icon.svg"),
     layout="wide",
 )
 
-st.logo("static/prism-logo.svg", size="large", icon_image="static/prism-icon.svg")
+st.logo(str(STATIC / "prism-logo.svg"), size="large",
+        icon_image=str(STATIC / "prism-icon.svg"))
 
 st.markdown(
     """
