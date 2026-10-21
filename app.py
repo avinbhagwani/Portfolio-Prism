@@ -1,113 +1,61 @@
 """
-PRISM entry point. Owns page config and the sidebar navigation only —
-every tool's actual UI lives in views/, imported and dispatched here.
+PRISM entry point: page config, the left navigation, the first-visit
+intro and the shared sidebar footer. Every tool's UI lives in views/.
 
 To add a new tool:
   1. Build it in views/<name>.py with a render() function.
-  2. Add an entry to NAV_ITEMS below.
-  3. Add a branch in the routing block at the bottom.
+  2. Add an st.Page entry to PAGES below.
 """
+
+from pathlib import Path
 
 import streamlit as st
 
-from views import factor_analysis, factor_indexes, drawdown_analysis, coming_soon
+from views import factor_analysis, factor_indexes, drawdown_analysis, coming_soon, intro, sidebar
+
+STATIC = Path(__file__).resolve().parent / "static"
 
 st.set_page_config(
     page_title="PRISM",
-    page_icon="📊",
-    layout="wide"
+    page_icon=str(STATIC / "prism-icon.svg"),
+    layout="wide",
 )
 
-# =========================================================
-# PRISM NAVIGATION
-# =========================================================
-
-st.sidebar.title("PRISM")
-st.sidebar.markdown("---")
-
-NAV_ITEMS = [
-    {"key": "factor", "label": "Factor Analysis"},
-    {"key": "fbi", "label": "FBI Intelligence"},
-    {"key": "drawdown", "label": "Drawdown Analysis"},
-    {
-        "key": "efficient_frontier",
-        "label": "Efficient Frontier",
-        "badge": "Soon"
-    },
-]
-
-if "nav_page" not in st.session_state:
-    st.session_state.nav_page = "factor"
+st.logo(str(STATIC / "prism-logo-light.svg"), size="large",
+        icon_image=str(STATIC / "prism-icon-light.svg"))
 
 st.markdown(
     """
     <style>
-    div[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]
-        div.stButton > button {
-        width: 100%;
-        justify-content: flex-start;
-        text-align: left;
-        border-radius: 10px;
-        padding: 0.55rem 0.9rem;
-        margin-bottom: 0.3rem;
-        font-weight: 500;
-        font-size: 0.92rem;
-        border: 1px solid transparent;
-        transition: background-color 0.15s ease, border-color 0.15s ease;
-    }
-    div[data-testid="stSidebar"] button[kind="secondary"] {
-        background-color: transparent;
-        color: inherit;
-        opacity: 0.85;
-    }
-    div[data-testid="stSidebar"] button[kind="secondary"]:hover {
-        background-color: rgba(128, 128, 128, 0.15);
-        border-color: rgba(128, 128, 128, 0.25);
-        opacity: 1;
+    [data-testid="stMainBlockContainer"] {
+        max-width: 1180px; padding-top: 3rem; padding-bottom: 3rem;
     }
     </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
-for item in NAV_ITEMS:
-    is_active = st.session_state.nav_page == item["key"]
+if not st.session_state.get("intro_shown"):
+    intro.show()
+    st.session_state["intro_shown"] = True
 
-    label = item["label"]
-    if item.get("badge"):
-        label += f"   ·  {item['badge']}"
 
-    if st.sidebar.button(
-        label,
-        key=f"nav_btn_{item['key']}",
-        type="primary" if is_active else "secondary",
-        width="stretch"
-    ):
-        st.session_state.nav_page = item["key"]
-        st.rerun()
-
-nav_page = st.session_state.nav_page
-
-st.sidebar.markdown("---")
-st.sidebar.caption(
-    "Have a question, found a bug, or want to suggest a feature? "
-    "Reach out anytime: "
-    "[connect on LinkedIn](https://www.linkedin.com/in/avinbhagwani69/) "
-    "or drop me a line at avinbhagwani69@gmail.com."
-)
-
-# =========================================================
-# ROUTING
-# =========================================================
-
-if nav_page == "fbi":
-    factor_indexes.render()
-
-elif nav_page == "drawdown":
-    drawdown_analysis.render()
-
-elif nav_page == "efficient_frontier":
+def _efficient_frontier():
     coming_soon.render("Efficient Frontier")
 
-else:
-    factor_analysis.render()
+
+PAGES = [
+    st.Page(factor_analysis.render, title="Factor Analysis",
+            icon=":material/insights:", url_path="factor-analysis", default=True),
+    st.Page(factor_indexes.render, title="FBI Intelligence",
+            icon=":material/query_stats:", url_path="fbi-intelligence"),
+    st.Page(drawdown_analysis.render, title="Drawdown Analysis",
+            icon=":material/trending_down:", url_path="drawdown-analysis"),
+    st.Page(_efficient_frontier, title="Efficient Frontier",
+            icon=":material/scatter_plot:", url_path="efficient-frontier"),
+]
+
+page = st.navigation(PAGES, position="hidden")
+sidebar.render({p.url_path or "factor-analysis": p for p in PAGES},
+               page.url_path or "factor-analysis")
+page.run()
