@@ -35,9 +35,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-if not st.session_state.get("intro_shown"):
-    intro.show()
-    st.session_state["intro_shown"] = True
+# Always render the intro slot (empty after the first run) so every
+# element below keeps the same position between reruns. If it vanished,
+# Streamlit would treat the page's tabs as new and reset them to the
+# first tab on the visitor's first click.
+intro.show(first_visit=not st.session_state.get("intro_shown"))
+st.session_state["intro_shown"] = True
 
 
 def _efficient_frontier():

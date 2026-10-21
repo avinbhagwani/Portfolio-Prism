@@ -12,8 +12,10 @@ Loads the two FinAPI index data files shipped in data/:
       only have data from their launch date onward, so NaNs before that
       are expected, not a data error.
 
-Both are cached with st.cache_data since they're read from disk on every
-call otherwise. Swap the file paths here if you move to a live feed later
+Both are loaded once per server process with st.cache_resource and shared
+read-only: st.cache_data would hand every caller a fresh copy of the
+20 MB history frame (~45 ms each, many times per page run). Callers must
+not modify the returned frames in place (they all slice or .copy()). Swap the file paths here if you move to a live feed later
 — nothing outside this module needs to know where the data comes from.
 """
 
@@ -27,13 +29,13 @@ CATALOGUE_PATH = DATA_DIR / "finapi_index_catalogue.csv"
 HISTORY_PATH = DATA_DIR / "finapi_all_indices_history.csv"
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def load_catalogue():
     """One row per index: indexName, displayName, indexType, indexCategory."""
     return pd.read_csv(CATALOGUE_PATH)
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_resource(show_spinner=False)
 def load_index_history():
     """Daily levels for every index, wide format, indexed by Date."""
     df = pd.read_csv(HISTORY_PATH, index_col=0, parse_dates=True)
