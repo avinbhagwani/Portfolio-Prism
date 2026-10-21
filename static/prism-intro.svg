@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 180" width="360" height="180">
+<style>
+.prism { fill: url(#glass); stroke: #1F4E79; stroke-width: 3; stroke-linejoin: round;
+  stroke-dasharray: 400; stroke-dashoffset: 400; animation: draw 0.7s ease 0.05s forwards; }
+.beam { stroke: #8A939E; stroke-width: 3; stroke-linecap: round;
+  stroke-dasharray: 160; stroke-dashoffset: 160; animation: draw 0.35s ease-in 0.55s forwards; }
+.inner { stroke: #C9CFD6; stroke-width: 2.4; stroke-linecap: round;
+  stroke-dasharray: 90; stroke-dashoffset: 90; animation: draw 0.2s linear 0.8s forwards; }
+.ray { stroke-width: 3; stroke-linecap: round;
+  stroke-dasharray: 170; stroke-dashoffset: 170; animation: draw 0.5s ease-out forwards; }
+.glow { fill: #FFF6DC; opacity: 0; animation: flash 0.7s ease 0.85s forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes flash { 0% { opacity: 0; } 40% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .prism, .beam, .inner, .ray { animation-duration: 0.01s; animation-delay: 0s; } }
+</style>
+<defs><linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#F7FAFD"/><stop offset="1" stop-color="#E4ECF4"/></linearGradient></defs>
+<line class="beam" x1="12" y1="128" x2="142" y2="104"/>
+<polygon class="prism" points="180,30 242,150 118,150"/>
+<line class="inner" x1="142" y1="104" x2="222" y2="112"/>
+<circle class="glow" cx="222" cy="112" r="10"/>
+<line class="ray" x1="222" y1="112" x2="350" y2="70" stroke="#B5523B" style="animation-delay:0.90s"/><line class="ray" x1="222" y1="112" x2="350" y2="87" stroke="#D08A2E" style="animation-delay:0.97s"/><line class="ray" x1="222" y1="112" x2="350" y2="104" stroke="#D9B43C" style="animation-delay:1.04s"/><line class="ray" x1="222" y1="112" x2="350" y2="121" stroke="#5E9A62" style="animation-delay:1.11s"/><line class="ray" x1="222" y1="112" x2="350" y2="138" stroke="#3B7EA1" style="animation-delay:1.18s"/><line class="ray" x1="222" y1="112" x2="350" y2="155" stroke="#5B4E8C" style="animation-delay:1.25s"/>
+</svg>
