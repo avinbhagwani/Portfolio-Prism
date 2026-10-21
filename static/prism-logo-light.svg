@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="132" height="32" viewBox="0 0 132 32">
+  <polygon points="16,3 29,27 3,27" fill="none" stroke="#9FC0DE" stroke-width="2.4" stroke-linejoin="round"/>
+  <line x1="16" y1="3" x2="16" y2="27" stroke="#E0B15C" stroke-width="2.2"/>
+  <text x="38" y="23.5" font-family="Inter, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" letter-spacing="2.2" fill="#FFFFFF">PRISM</text>
+</svg>

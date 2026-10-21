@@ -39,4 +39,8 @@ url = "app/static/fonts/Inter-Bold.otf"
 weight = 700
 
 [theme.sidebar]
-backgroundColor = "#F4F6F8"
+backgroundColor = "#0F2436"
+secondaryBackgroundColor = "#17324A"
+textColor = "#DCE4EC"
+primaryColor = "#E0B15C"
+borderColor = "#22405B"
