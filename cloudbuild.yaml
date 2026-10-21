@@ -31,6 +31,12 @@ steps:
       # + matplotlib alone take ~250 MB, and chart rendering adds more.
       - '--memory'
       - '1Gi'
+      # Extra CPU while a new instance starts up, so cold starts (the
+      # first visit after the app has been idle) finish sooner.
+      - '--cpu-boost'
+      # Keep each visitor on the same instance; Streamlit holds session
+      # state in memory and talks over a websocket.
+      - '--session-affinity'
 
 options:
   logging: CLOUD_LOGGING_ONLY

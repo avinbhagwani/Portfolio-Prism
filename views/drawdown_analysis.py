@@ -14,7 +14,7 @@ from core.index_analytics import (
     find_drawdown_episodes,
 )
 from charts.index_chart import make_drawdown_chart
-from charts.render import show_figure
+from charts.render import show_chart
 from views._shared import select_indices
 
 DEFAULT_INDICES = ["NIFTY 50", "NIFTY MIDCAP 100"]
@@ -61,9 +61,7 @@ def render():
         st.warning("Not enough history to compute drawdowns.")
         return
 
-    fig = make_drawdown_chart(dd)
-    show_figure(fig)
-    plt.close(fig)
+    show_chart(make_drawdown_chart, dd)
 
     # =========================================================
     # SUMMARY

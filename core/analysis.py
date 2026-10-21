@@ -8,6 +8,8 @@ Pure calculation lives in core/regression_stats.py; chart drawing lives in
 charts/.
 """
 
+from types import SimpleNamespace
+
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -24,7 +26,7 @@ from core.regression_stats import (
 )
 from charts.factor_chart import make_factor_chart
 from charts.rolling_chart import make_rolling_chart
-from charts.render import show_figure
+from charts.render import show_chart
 
 
 def run_factor_analysis(return_series, model_key, analysis_name):
@@ -100,14 +102,13 @@ def run_factor_analysis(return_series, model_key, analysis_name):
         hide_index=True
     )
 
-    fig = make_factor_chart(
-        model,
-        display_columns,
+    # Pass only what the chart reads so the rendered PNG can be cached
+    show_chart(
+        make_factor_chart,
+        SimpleNamespace(params=model.params, pvalues=model.pvalues),
+        list(display_columns),
         f"{analysis_name} — Factor Exposures"
     )
-
-    show_figure(fig)
-    plt.close(fig)
 
     st.markdown("#### Interpretation")
 
@@ -167,27 +168,10 @@ its two major systematic risk drivers:
     }
 
 
-def run_rolling_regression(
-    regression_df,
-    factor_columns,
-    rolling_months,
-    analysis_name
-):
-    required = ["Excess_Fund_Return"] + factor_columns
-
-    data = (
-        regression_df[required]
-        .dropna()
-        .sort_index()
-    )
-
-    if len(data) < rolling_months:
-        st.warning(
-            f"Not enough observations for {rolling_months}-month "
-            f"rolling regression. Available: {len(data)}."
-        )
-        return None
-
+@st.cache_data(max_entries=200, ttl=6 * 3600, show_spinner=False)
+def _rolling_fits(data, factor_columns, rolling_months):
+    """One HAC regression per rolling window; cached on the inputs."""
+    factor_columns = list(factor_columns)
     results = []
 
     for i in range(rolling_months - 1, len(data)):
@@ -227,6 +211,35 @@ def run_rolling_regression(
         return None
 
     rolling_df = rolling_df.set_index("Date")
+    return rolling_df
+
+
+def run_rolling_regression(
+    regression_df,
+    factor_columns,
+    rolling_months,
+    analysis_name
+):
+    required = ["Excess_Fund_Return"] + factor_columns
+
+    data = (
+        regression_df[required]
+        .dropna()
+        .sort_index()
+    )
+
+    if len(data) < rolling_months:
+        st.warning(
+            f"Not enough observations for {rolling_months}-month "
+            f"rolling regression. Available: {len(data)}."
+        )
+        return None
+
+    rolling_df = _rolling_fits(data, tuple(factor_columns), rolling_months)
+
+    if rolling_df is None:
+        return None
+
 
     st.subheader(
         f"{analysis_name} — Rolling Regression"
@@ -252,18 +265,15 @@ def run_rolling_regression(
                 else FACTOR_LABELS.get(factor, factor)
             )
 
-            fig = make_rolling_chart(
-                rolling_df,
-                factor,
-                p_column,
-                title,
-                rolling_months
-            )
-
             with col:
-                show_figure(fig)
-
-            plt.close(fig)
+                show_chart(
+                    make_rolling_chart,
+                    rolling_df,
+                    factor,
+                    p_column,
+                    title,
+                    rolling_months
+                )
 
     st.write("Rolling Regression Results")
     st.dataframe(

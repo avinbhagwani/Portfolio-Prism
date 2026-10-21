@@ -89,5 +89,5 @@ INTRO_HTML = """
 """.replace("LETTERS_HTML", _letters_html)
 
 
-def show():
-    st.html(INTRO_HTML)
+def show(first_visit=True):
+    st.html(INTRO_HTML if first_visit else "<div hidden></div>")

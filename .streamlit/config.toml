@@ -20,22 +20,22 @@ headingFontWeights = [600, 600, 600, 600, 600, 600]
 
 [[theme.fontFaces]]
 family = "Inter"
-url = "app/static/fonts/Inter-Regular.otf"
+url = "app/static/fonts/Inter-Regular.woff2"
 weight = 400
 
 [[theme.fontFaces]]
 family = "Inter"
-url = "app/static/fonts/Inter-Medium.otf"
+url = "app/static/fonts/Inter-Medium.woff2"
 weight = 500
 
 [[theme.fontFaces]]
 family = "Inter"
-url = "app/static/fonts/Inter-SemiBold.otf"
+url = "app/static/fonts/Inter-SemiBold.woff2"
 weight = 600
 
 [[theme.fontFaces]]
 family = "Inter"
-url = "app/static/fonts/Inter-Bold.otf"
+url = "app/static/fonts/Inter-Bold.woff2"
 weight = 700
 
 [theme.sidebar]

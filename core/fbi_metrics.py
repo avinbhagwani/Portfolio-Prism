@@ -15,6 +15,7 @@ Conventions, applied everywhere on the page so every number agrees:
 import re
 
 import pandas as pd
+import streamlit as st
 
 from core.index_data import load_catalogue, load_index_history
 
@@ -60,6 +61,7 @@ def pretty_name(name):
     return " ".join(fix(w) for w in name.split())
 
 
+@st.cache_data(show_spinner=False)
 def equity_universe():
     """
     Catalogue rows for equity indices that are comparable on a total
@@ -81,6 +83,7 @@ def short_category(category):
 # Data window
 # ---------------------------------------------------------------------
 
+@st.cache_data(show_spinner=False)
 def as_of_date():
     """Last trading day of the last complete month in the data."""
     history = load_index_history()

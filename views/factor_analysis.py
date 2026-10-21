@@ -19,7 +19,8 @@ from core.data import (
 )
 from core.analysis import run_factor_analysis, run_rolling_regression
 from charts.theme import apply_chart_theme
-from charts.render import show_figure
+from charts.render import show_chart
+from charts.nav_chart import make_nav_chart, make_cumulative_chart
 
 
 def render():
@@ -153,34 +154,11 @@ def render():
 
                             st.subheader("NAV Performance")
 
-                            fig, ax = plt.subplots(figsize=(12, 4))
-
-                            ax.plot(
-                                filtered["date"],
-                                filtered["nav"],
-                                linewidth=2
+                            show_chart(
+                                make_nav_chart,
+                                filtered["date"].reset_index(drop=True),
+                                filtered["nav"].reset_index(drop=True)
                             )
-
-                            ax.set_xlabel("Date")
-                            ax.set_ylabel("NAV")
-                            ax.set_title(
-                                "NAV Performance",
-                                fontsize=17,
-                                fontweight="bold"
-                            )
-                            ax.grid(
-                                axis="y",
-                                linestyle=":",
-                                alpha=0.4
-                            )
-
-                            apply_chart_theme(fig, ax)
-
-                            fig.autofmt_xdate()
-                            fig.tight_layout()
-
-                            show_figure(fig)
-                            plt.close(fig)
 
                             monthly_returns = get_monthly_returns(
                                 selected_code,
@@ -491,43 +469,7 @@ def render():
                                 - 1
                             ) * 100
 
-                            fig, ax = plt.subplots(figsize=(12, 5))
-
-                            ax.plot(
-                                cumulative.index,
-                                cumulative.values,
-                                linewidth=2
-                            )
-
-                            ax.axhline(
-                                0,
-                                color="#888888",
-                                linestyle="--",
-                                linewidth=1
-                            )
-
-                            ax.set_title(
-                                "Portfolio Cumulative Return",
-                                fontsize=18,
-                                fontweight="bold"
-                            )
-
-                            ax.set_xlabel("Date")
-                            ax.set_ylabel("Cumulative Return (%)")
-
-                            ax.grid(
-                                axis="y",
-                                linestyle=":",
-                                alpha=0.4
-                            )
-
-                            apply_chart_theme(fig, ax)
-
-                            fig.autofmt_xdate()
-                            fig.tight_layout()
-
-                            show_figure(fig)
-                            plt.close(fig)
+                            show_chart(make_cumulative_chart, cumulative)
 
                             # -----------------------------------------
                             # MONTHLY RETURNS

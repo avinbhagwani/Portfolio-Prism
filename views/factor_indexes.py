@@ -24,7 +24,7 @@ import streamlit as st
 
 from charts import fbi_vega as fv
 from charts.quilt_chart import build_quilt_color_map, make_quilt_chart
-from charts.render import show_figure
+from charts.render import show_chart
 from core import fbi_metrics as fm
 from core.index_analytics import build_quilt
 
@@ -181,8 +181,17 @@ def _section():
     st.markdown("<div class='fbi-section'></div>", unsafe_allow_html=True)
 
 
-def _chart(chart):
-    st.altair_chart(chart, theme=None, width="stretch")
+@st.cache_data(max_entries=300, ttl=6 * 3600, show_spinner=False)
+def _chart_spec(builder_name, args):
+    """Build an Altair chart and return its Vega-Lite spec, cached on the
+    inputs. Building and validating a chart costs ~0.1 s; a cached spec
+    costs nothing, so reruns from unrelated clicks are instant."""
+    return getattr(fv, builder_name)(*args).to_dict()
+
+
+def _chart(builder, *args):
+    st.vega_lite_chart(_chart_spec(builder.__name__, args), theme=None,
+                       width="stretch")
 
 
 def _n(name):
@@ -245,7 +254,7 @@ def _overview(ctx):
     _kpi_cards(ctx, stats)
 
     _label("Growth of ₹1 lakh")
-    _chart(fv.growth_chart(w, ctx["names"], bench))
+    _chart(fv.growth_chart, w, ctx["names"], bench)
 
 
 def _kpi_cards(ctx, stats):
@@ -310,7 +319,7 @@ def _returns(ctx):
                      f"each other, {_n(a)} led in {vs['pct']:.0f}% of periods.")
         _headline(text)
         _label(f"Rolling {win}-year return, annualised")
-        _chart(fv.rolling_chart(rolling, ctx["names"], bench))
+        _chart(fv.rolling_chart, rolling, ctx["names"], bench)
         _note("Consecutive rolling periods overlap heavily, so read these "
               "percentages as a guide rather than proof.")
 
@@ -325,7 +334,7 @@ def _returns(ctx):
     _headline(f"<b>{_n(a)}</b> beat the {_n(bench)} in {wins} of the last "
               f"{len(full)} calendar years.")
     _label("Calendar-year return")
-    _chart(fv.calendar_chart(shown, ctx["names"], bench, partial))
+    _chart(fv.calendar_chart, shown, ctx["names"], bench, partial)
 
 
 # =====================================================================
@@ -348,7 +357,7 @@ def _risk(ctx):
     _headline(text)
     _shortened_note(ctx)
     _label("Fall from previous high")
-    _chart(fv.drawdown_chart(w, ctx["names"], bench))
+    _chart(fv.drawdown_chart, w, ctx["names"], bench)
 
     pts = []
     for p in picks:
@@ -363,7 +372,7 @@ def _risk(ctx):
     _section()
     _headline(text)
     _label(f"Upside and downside capture against the {_n(bench)}")
-    _chart(fv.capture_chart(pts, bench))
+    _chart(fv.capture_chart, pts, bench)
 
 
 # =====================================================================
@@ -388,21 +397,8 @@ def _scatter(ctx, universe, slot):
                            format_func=fm.short_category, key="fbi_map_cat")
     bench, years = ctx["bench"], ctx["years"]
     members = universe.loc[universe["indexCategory"] == cat, "indexName"].tolist()
-    names = list(dict.fromkeys(members + [bench] + ctx["picks"]))
-    levels = fm.levels_to_as_of(names)
-    as_of = levels.index.max()
-    start = (as_of - pd.DateOffset(years=years)) if years else pd.Timestamp("2005-04-01")
-    start = levels.index[levels.index >= start].min()
-
-    rows = {}
-    for n in names:
-        s = levels[n]
-        if s.first_valid_index() is None or s.first_valid_index() > start:
-            continue
-        seg = s.loc[start:].ffill()
-        rows[n] = {"Return": fm.cagr(seg),
-                   "Volatility": fm.volatility(seg.to_frame()).iloc[0]}
-    pts = pd.DataFrame(rows).T
+    names = tuple(dict.fromkeys(members + [bench] + ctx["picks"]))
+    pts, start = _risk_return_points(names, years)
     if bench not in pts.index or len(pts) < 3:
         _headline("Not enough indices with the full history for this period.")
         return
@@ -417,10 +413,28 @@ def _scatter(ctx, universe, slot):
               f"{phrase}; {len(calmer)} of them did it with less volatility.")
     top = pts.loc[in_cat].sort_values("Return", ascending=False).index[:2].tolist()
     _label("Annualised return against volatility. Hover any dot for its name.")
-    _chart(fv.risk_return_chart(pts, bench, ctx["picks"], top))
+    _chart(fv.risk_return_chart, pts, bench, ctx["picks"], top)
     missing = len([n for n in members if n not in pts.index])
     if missing:
         _note(f"{missing} newer indices without the full history are left out.")
+
+
+@st.cache_data(max_entries=200, ttl=6 * 3600, show_spinner=False)
+def _risk_return_points(names, years):
+    """Annualised return and volatility for every index with the full window."""
+    levels = fm.levels_to_as_of(list(names))
+    as_of = levels.index.max()
+    start = (as_of - pd.DateOffset(years=years)) if years else pd.Timestamp("2005-04-01")
+    start = levels.index[levels.index >= start].min()
+    rows = {}
+    for n in names:
+        s = levels[n]
+        if s.first_valid_index() is None or s.first_valid_index() > start:
+            continue
+        seg = s.loc[start:].ffill()
+        rows[n] = {"Return": fm.cagr(seg),
+                   "Volatility": fm.volatility(seg.to_frame()).iloc[0]}
+    return pd.DataFrame(rows).T, start
 
 
 def _quilt(ctx, universe, slot):
@@ -451,16 +465,19 @@ def _quilt(ctx, universe, slot):
     _headline(f"Leadership keeps changing: <b>{unique} different indices</b> "
               f"topped the table in the last {len(last_full)} years.")
     title_prefix = "Asset Allocation Quilt" if preset == "Custom" else preset
-    with plt.rc_context({"font.family": "DejaVu Sans", "text.color": "black"}):
-        fig = make_quilt_chart(
-            quilt, build_quilt_color_map(chosen),
-            title=f"{title_prefix} ({cols[0]}–{cols[-1]})",
-        )
-    show_figure(fig)
-    plt.close(fig)
+    show_chart(
+        _quilt_figure, quilt, build_quilt_color_map(chosen),
+        f"{title_prefix} ({cols[0]}\u2013{cols[-1]})",
+    )
     if partial:
         _note(f"{partial} is a partial year: the return shown is year to date, "
               f"to {levels.index.max():%d %b %Y}.")
+
+
+def _quilt_figure(quilt, color_map, title):
+    """Original quilt style, in its original font."""
+    with plt.rc_context({"font.family": "DejaVu Sans", "text.color": "black"}):
+        return make_quilt_chart(quilt, color_map, title=title)
 
 
 # =====================================================================
