@@ -190,7 +190,7 @@ def _reader(post, posts):
     st.button("All articles", icon=":material/arrow_back:", type="tertiary",
               on_click=_close)
     st.markdown(
-        f"<div class='pw-meta'>{sb.PUBLICATION.upper()}</div>"
+        "<div class='pw-meta'>MY SUBSTACK</div>"
         f"<div class='pw-a-title'>{post.title}</div>"
         f"<div class='pw-a-sub'>{post.subtitle}</div>"
         f"<div class='pw-byline'><b>Avin Bhagwani</b> · {_meta(post)}</div>",
