@@ -60,6 +60,7 @@ PAGE_ANIMATIONS = {
     "drawdown-analysis": _svg("anim-drawdown-analysis.svg"), # fall, underwater, recovery
     "writing": _svg("anim-writing.svg"),                     # a page being written
     "try-to-time": _svg("anim-try-to-time.svg"),             # the order reshuffles
+    "can-you-handle-it": _svg("anim-can-you-handle-it.svg"), # the fall, then the climb back
 }
 # Text in the intro finishes about 2.45 s in; take whichever ends later.
 INTRO_FADE = round(max(_animation_end(INTRO_SVG), 2.45) + HOLD + 0.2, 2)

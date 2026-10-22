@@ -28,6 +28,8 @@ SECTIONS = [
     ("Games", [
         ("try-to-time", "Try to Time", ":material/sports_esports:",
          "Pick next year's winner"),
+        ("can-you-handle-it", "Can You Handle It?", ":material/monitor_heart:",
+         "Sit through a crash"),
     ]),
     ("Read", [
         ("writing", "Writing", ":material/edit_note:",

@@ -51,3 +51,77 @@ def render_try_to_time():
             "- **Source.** NSE Indices via FinAPI. Past returns don't predict "
             "future ones, which is rather the point."
         )
+
+
+# =====================================================================
+# CAN YOU HANDLE IT?
+# =====================================================================
+
+HANDLE_CSS = """
+<style>
+.hi-step {font-size:0.78rem; letter-spacing:0.12em; text-transform:uppercase; color:#8A939E;
+  font-weight:600; margin:0 0 0.2rem 0;}
+</style>
+"""
+
+
+@st.cache_resource(show_spinner=False)
+def _handle_template():
+    return (STATIC / "handle-it.html").read_text(encoding="utf-8")
+
+
+def render_handle_it():
+    from core import fbi_metrics as fm
+    from core.data import search_funds
+    from core.handle_game import PRESETS, payload
+
+    st.markdown(HANDLE_CSS, unsafe_allow_html=True)
+    universe = fm.equity_universe()
+    names = universe["indexName"].tolist()
+    ordered = [p for p in PRESETS if p in names] + [n for n in names if n not in PRESETS]
+
+    with st.container(border=True):
+        st.markdown("<div class='hi-step'>What do you want to invest in?</div>",
+                    unsafe_allow_html=True)
+        kind_col, pick_col, cmp_col = st.columns([1.1, 2.4, 1.6], gap="medium",
+                                                 vertical_alignment="bottom")
+        with kind_col:
+            kind = st.segmented_control("Type", ["Index", "Mutual fund"], default="Index",
+                                        key="hi_kind", label_visibility="collapsed") or "Index"
+        key = label = None
+        with pick_col:
+            if kind == "Index":
+                choice = st.selectbox("Index", ordered,
+                                      index=ordered.index("NIFTY SMALLCAP 250")
+                                      if "NIFTY SMALLCAP 250" in ordered else 0,
+                                      format_func=fm.pretty_name, key="hi_index")
+                key, label = choice, fm.pretty_name(choice)
+            else:
+                term = st.text_input("Fund", placeholder="Type at least 3 letters of a fund name",
+                                     key="hi_fund_q", label_visibility="collapsed")
+                matches = search_funds(term) if term else []
+                if matches:
+                    opts = {m["name"]: m["code"] for m in matches[:60]}
+                    name = st.selectbox("Fund", list(opts), key="hi_fund",
+                                        label_visibility="collapsed")
+                    key, label = opts[name], name
+                elif term and len(term.strip()) >= 3:
+                    st.caption("No funds found. Try another name.")
+        with cmp_col:
+            cmp_opts = ["None", "NIFTY 50", "NIFTY 500", "NIFTY 100", "NIFTY MIDCAP 150"]
+            if kind == "Index" and key in cmp_opts:
+                cmp_opts.remove(key)
+            compare = st.selectbox("Compare with", cmp_opts, index=1 if len(cmp_opts) > 1 else 0,
+                                   format_func=lambda n: "Nothing else" if n == "None"
+                                   else fm.pretty_name(n), key="hi_cmp")
+
+    if not key:
+        st.info("Search for a fund above to start.")
+        return
+    with st.spinner("Loading history..."):
+        data = payload("index" if kind == "Index" else "fund", key, label,
+                       None if compare == "None" else compare)
+    if data is None:
+        st.warning("Couldn't load enough history for this one. Pick something with at least a few years of data, or try again in a minute.")
+        return
+    st.iframe(_handle_template().replace("__DATA__", data), height="content")
