@@ -1,6 +1,6 @@
 """
-First-visit intro (about 3.5 seconds, once per browser session) and a
-short prism transition (about 2 seconds) when switching pages. Each popup
+First-visit prism intro (about 3.5 seconds, once per browser session) and
+a short page-specific animation (about 1.7 seconds) when switching pages. Each popup
 stays up until its drawing has fully finished, plus a short pause.
 
 A light popup over the blurred page: a frosted glass prism tilts up into
@@ -51,6 +51,15 @@ def _data_uri(svg, nonce=None):
 
 INTRO_SVG = _svg("prism-intro.svg")
 TRANSITION_SVG = _svg("prism-transition.svg")
+
+# Each page gets its own short animation that shows what the page does;
+# anything not listed falls back to the prism transition.
+PAGE_ANIMATIONS = {
+    "factor-analysis": _svg("anim-factor-analysis.svg"),     # fund splits into factors
+    "fbi-intelligence": _svg("anim-fbi-intelligence.svg"),   # indices race a benchmark
+    "drawdown-analysis": _svg("anim-drawdown-analysis.svg"), # fall, underwater, recovery
+    "writing": _svg("anim-writing.svg"),                     # a page being written
+}
 # Text in the intro finishes about 2.45 s in; take whichever ends later.
 INTRO_FADE = round(max(_animation_end(INTRO_SVG), 2.45) + HOLD + 0.2, 2)
 TRANSITION_FADE = round(max(_animation_end(TRANSITION_SVG), 0.8) + HOLD, 2)
@@ -171,22 +180,28 @@ TRANSITION_HTML = """
 """
 
 
-def show(first_visit=True, transition_to=None, nonce=0):
+def _page_fade(svg):
+    return round(max(_animation_end(svg), 0.8) + HOLD, 2)
+
+
+def show(first_visit=True, transition_to=None, page_key=None, nonce=0):
     """
     Render the overlay slot. Always called (empty when nothing plays) so
     every element below keeps its position between reruns; otherwise
     Streamlit would reset the page's tabs on the next click.
 
     first_visit    full intro, once per session
-    transition_to  short prism transition naming the destination page;
+    transition_to  short transition naming the destination page, using
+                   that page's own animation (page_key) or the prism;
                    nonce makes each one a fresh element so it replays
     """
     if first_visit:
         st.html(INTRO_HTML)
     elif transition_to:
+        svg = PAGE_ANIMATIONS.get(page_key, TRANSITION_SVG)
         st.html(TRANSITION_HTML.replace("NONCE", str(nonce))
-                .replace("TRANSITION_FADE", str(TRANSITION_FADE))
-                .replace("TRANSITION_SRC", _data_uri(TRANSITION_SVG, nonce))
+                .replace("TRANSITION_FADE", str(_page_fade(svg)))
+                .replace("TRANSITION_SRC", _data_uri(svg, nonce))
                 .replace("DEST", transition_to))
     else:
         st.html("<div hidden></div>")

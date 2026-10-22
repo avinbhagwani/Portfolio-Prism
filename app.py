@@ -70,6 +70,7 @@ if switched:
 intro.show(
     first_visit=first_visit,
     transition_to=page.title if switched else None,
+    page_key=current,
     nonce=st.session_state.get("transition_n", 0),
 )
 st.session_state["intro_shown"] = True
