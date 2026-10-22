@@ -5,203 +5,220 @@
 <style>
   html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
                user-select: none; -webkit-user-select: none; }
-  body { perspective: 1100px; height: 100vh; }
+  body { perspective: 1200px; height: 100vh; }
   .panel {
     position: absolute; inset: 6px; border-radius: 24px; overflow: hidden;
     background:
-      radial-gradient(90% 80% at 30% 40%, #FFFFFF 0%, rgba(255,255,255,0) 60%),
-      linear-gradient(160deg, #F4F7FA 0%, #EEF3F8 55%, #F7F5F0 100%);
-    border: 1px solid #E6EBF0;
-    box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 12px 32px rgba(16,24,40,0.06);
+      radial-gradient(55% 45% at 78% 28%, rgba(70,110,190,0.30) 0%, rgba(0,0,0,0) 70%),
+      radial-gradient(50% 40% at 18% 82%, rgba(120,80,170,0.26) 0%, rgba(0,0,0,0) 70%),
+      radial-gradient(40% 35% at 55% 60%, rgba(40,150,160,0.12) 0%, rgba(0,0,0,0) 70%),
+      linear-gradient(160deg, #0B1A2E 0%, #070F1D 55%, #0A0F1C 100%);
+    box-shadow: 0 2px 4px rgba(10,20,40,0.10), 0 24px 48px rgba(10,20,40,0.22);
     transform-origin: 50% 50%; will-change: transform;
   }
-  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
-           /* soft edges: nothing is ever cut off by the panel border */
-           -webkit-mask-image: radial-gradient(120% 110% at 40% 50%, #000 62%, transparent 100%);
-                   mask-image: radial-gradient(120% 110% at 40% 50%, #000 62%, transparent 100%); }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 </style>
 </head>
 <body>
 <div class="panel" id="panel"><canvas id="c"></canvas></div>
 <script>
 /*
-  Minimal, interactive prism. Every value is eased, nothing jumps.
-    move         the light follows the cursor; the spectrum swings with it,
-                 and the panel tilts slightly toward the cursor in 3D
-    hover prism  the prism lifts and glows; the rays brighten
-    hover a ray  that ray lights up, the rest dim, a bead rides along it
-    click        a soft ripple and a brief flare of the spectrum
-  Idle or touch: the light drifts on its own.
+  Space scene. A 3D glass crystal floats and slowly turns among stars; a
+  bright star you steer with the cursor sends a stream of starlight into
+  it, which leaves as soft swirling nebula clouds in PRISM's palette.
+    move         steer the star; star layers shift with depth; panel tilts
+    hover prism  the prism glows
+    click        a starburst from the prism
+  Idle or touch: the star drifts on its own. Shooting stars now and then.
 */
 (() => {
-  const COLORS = ["#1F4E79", "#2F8F9D", "#C08A2E", "#5E9A62", "#8E5B9F"];
-  const cv = document.getElementById("c");
-  const ctx = cv.getContext("2d");
+  const PLUMES = ["#5B8FD6", "#3FB3BF", "#E2B062", "#79C08A", "#B48AD9"];
+  const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+  const panel = document.getElementById("panel");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let W = 0, H = 0, target = null, lastMove = -1e9, t0 = performance.now();
-  let src = null, ripples = [], motes = [];
-  let hp = 0, flare = 0, tiltX = 0, tiltY = 0, rayHot = [0, 0, 0, 0, 0];
-  const panel = document.getElementById("panel");
+  let src = null, stars = [], dust = [], bursts = [], meteors = [], nextMeteor = 3000;
+  let glow = 0, tiltX = 0, tiltY = 0, par = [0, 0];
 
   function resize() {
     const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    stars = Array.from({ length: Math.round(W * H / 1500) }, () => ({
+      x: Math.random() * W, y: Math.random() * H, z: 0.2 + Math.random() * 0.8,
+      ph: Math.random() * Math.PI * 2, sp: 0.6 + Math.random() * 1.6,
+    }));
   }
   window.addEventListener("resize", resize); resize();
 
   const local = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   window.addEventListener("pointermove", e => { target = local(e); lastMove = performance.now(); });
   window.addEventListener("pointerleave", () => { target = null; });
-  window.addEventListener("pointerdown", () => { ripples.push({ born: performance.now() }); flare = 1; });
-
-  function inTriangle(p, G) {
-    const sg = (a, b, c) => (a[0] - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (a[1] - c[1]);
-    const d1 = sg(p, G.A, G.B), d2 = sg(p, G.B, G.C), d3 = sg(p, G.C, G.A);
-    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
-  }
-  function project(p, a, b) {   // closest point on segment a-b, and its distance
-    const vx = b[0] - a[0], vy = b[1] - a[1];
-    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / (vx * vx + vy * vy)));
-    const q = [a[0] + t * vx, a[1] + t * vy];
-    return { q, t, d: Math.hypot(p[0] - q[0], p[1] - q[1]) };
-  }
+  window.addEventListener("pointerdown", () => bursts.push({ born: performance.now() }));
 
   const lerp = (a, b, t) => a + (b - a) * t;
   const mix = (p, q, t) => [lerp(p[0], q[0], t), lerp(p[1], q[1], t)];
+  const rot = (p, c, a) => { const dx = p[0] - c[0], dy = p[1] - c[1], cs = Math.cos(a), sn = Math.sin(a);
+                             return [c[0] + dx * cs - dy * sn, c[1] + dx * sn + dy * cs]; };
 
-  function geometry() {
-    const s = Math.min(H * 0.46, W * 0.30);
-    const cx = W * 0.42, cy = H * 0.54, h = s * Math.sqrt(3) / 2;
-    return { s, cx, cy,
-      A: [cx, cy - h * 0.62], B: [cx + s / 2, cy + h * 0.38], C: [cx - s / 2, cy + h * 0.38] };
+  function prism(now) {
+    const k = (now - t0) / 1000;
+    const s = Math.min(H * 0.42, W * 0.27), h = s * Math.sqrt(3) / 2;
+    const c = [W * 0.44, H * 0.55 + Math.sin(k * 0.9) * 4];      // gentle float
+    const a = Math.sin(k * 0.55) * 0.05;                        // and sway
+    const turn = Math.sin(k * 0.35);                            // slow turn shows depth
+    const d = [s * (0.20 + 0.06 * turn), -s * (0.14 - 0.03 * turn)];
+    const A = rot([c[0], c[1] - h * 0.62], c, a), B = rot([c[0] + s / 2, c[1] + h * 0.38], c, a),
+          C = rot([c[0] - s / 2, c[1] + h * 0.38], c, a);
+    const back = p => [p[0] + d[0], p[1] + d[1]];
+    return { s, c, A, B, C, A2: back(A), B2: back(B), C2: back(C) };
+  }
+  function inTri(p, P) {
+    const sg = (a, b, c) => (a[0] - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (a[1] - c[1]);
+    const d1 = sg(p, P.A, P.B), d2 = sg(p, P.B, P.C), d3 = sg(p, P.C, P.A);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  }
+  function sparkle(x, y, r, a, col) {        // four-point star flare
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = r * 3;
+    ctx.beginPath(); ctx.arc(x, y, r * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = a * 0.7; ctx.lineWidth = 1; ctx.strokeStyle = col;
+    ctx.beginPath(); ctx.moveTo(x - r * 3, y); ctx.lineTo(x + r * 3, y);
+    ctx.moveTo(x, y - r * 3); ctx.lineTo(x, y + r * 3); ctx.stroke(); ctx.restore();
   }
 
   function frame(now) {
-    const G = geometry();
-    // where the light comes from: the cursor (kept left of the prism), or a slow drift
+    const k = (now - t0) / 1000, P = prism(now);
     const idle = !target || now - lastMove > 3000;
-    const k = (now - t0) / 1000;
-    const goal = idle
-      ? [W * 0.08, G.cy + Math.sin(k * 0.5) * H * 0.16]
-      : [Math.min(Math.max(target[0], W * 0.03), G.C[0] - 40), Math.min(Math.max(target[1], H * 0.08), H * 0.94)];
-    src = src ? mix(src, goal, 0.14) : goal;
 
-    // eased states: prism hover, click flare, 3D tilt of the panel
-    const overPrism = target && !idle && inTriangle(target, G);
-    hp = lerp(hp, overPrism ? 1 : 0, 0.12);
-    flare *= 0.94;
-    const tx = target && !idle ? (target[1] / H - 0.5) * -6 : 0;
-    const ty = target && !idle ? (target[0] / W - 0.5) * 8 : 0;
-    tiltX = lerp(tiltX, tx, 0.08); tiltY = lerp(tiltY, ty, 0.08);
+    // eased interaction state
+    const pgoal = idle ? [0, 0] : [target[0] / W - 0.5, target[1] / H - 0.5];
+    par = mix(par, pgoal, 0.05);
+    tiltX = lerp(tiltX, -par[1] * 6, 0.08); tiltY = lerp(tiltY, par[0] * 8, 0.08);
     panel.style.transform = `rotateX(${tiltX.toFixed(2)}deg) rotateY(${tiltY.toFixed(2)}deg)`;
-
-    // entry on the left face, exit on the right face
-    const t = Math.max(0.3, Math.min(0.8, 0.55 + (src[1] - G.cy) / (G.s * 1.8)));
-    const E = mix(G.A, G.C, t), X = mix(G.A, G.B, Math.min(0.85, t + 0.06));
-    const inc = Math.atan2(E[1] - src[1], E[0] - src[0]);
-    const centre = 0.10 + inc * 0.62, spread = (0.30 + Math.min(0.34, Math.abs(inc) * 0.5)) * (1 + flare * 0.25);
+    const over = target && !idle && inTri(target, P);
+    glow = lerp(glow, over ? 1 : 0, 0.1);
+    cv.style.cursor = over ? "pointer" : "default";
 
     ctx.clearRect(0, 0, W, H);
 
-    // incoming light
-    const g = ctx.createLinearGradient(src[0], src[1], E[0], E[1]);
-    g.addColorStop(0, "rgba(120,128,140,0)"); g.addColorStop(1, "rgba(110,118,130,0.75)");
-    ctx.strokeStyle = g; ctx.lineWidth = 2.5; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(src[0], src[1]); ctx.lineTo(E[0], E[1]); ctx.stroke();
-
-    // spectrum: a soft fan plus five fine rays, all fading out before the edge
-    const L = (W * 0.93 - X[0]) / Math.max(0.6, Math.cos(centre));  // fade out inside the panel
-    const rays = COLORS.map((c, i) => {
-      const a = centre + spread * (i / 4 - 0.5);
-      return { c, end: [X[0] + Math.cos(a) * L, X[1] + Math.sin(a) * L] };
-    });
-    // which ray is under the cursor (if any)
-    let hot = -1, bead = null;
-    if (target && !idle && !overPrism) {
-      let best = 12;
-      rays.forEach((r, i) => { const pr = project(target, X, r.end);
-        if (pr.t > 0.04 && pr.t < 0.85 && pr.d < best) { best = pr.d; hot = i; bead = pr.q; } });
-    }
-    rayHot = rayHot.map((v, i) => lerp(v, i === hot ? 1 : 0, 0.15));
-    const anyHot = Math.max(...rayHot);
-    cv.style.cursor = overPrism || hot >= 0 ? "pointer" : "default";
-
-    ctx.save(); ctx.globalAlpha = 0.16 + hp * 0.08 + flare * 0.2 - anyHot * 0.08; ctx.filter = "blur(14px)";
-    ctx.beginPath(); ctx.moveTo(X[0], X[1]); ctx.lineTo(...rays[0].end); ctx.lineTo(...rays[4].end); ctx.closePath();
-    const fan = ctx.createLinearGradient(...rays[0].end, ...rays[4].end);
-    COLORS.forEach((c, i) => fan.addColorStop(i / 4, c));
-    ctx.fillStyle = fan; ctx.fill(); ctx.restore();
-
-    rays.forEach((r, i) => {
-      const rg = ctx.createLinearGradient(X[0], X[1], r.end[0], r.end[1]);
-      rg.addColorStop(0, r.c); rg.addColorStop(0.45, r.c + "AA"); rg.addColorStop(0.9, r.c + "00");
-      ctx.save();
-      ctx.globalAlpha = 1 - anyHot * 0.7 * (1 - rayHot[i]);
-      if (rayHot[i] > 0.05 || flare > 0.05) { ctx.shadowColor = r.c; ctx.shadowBlur = 14 * Math.max(rayHot[i], flare); }
-      ctx.strokeStyle = rg; ctx.lineWidth = 2.2 + hp * 0.8 + flare * 1.4 + rayHot[i] * 1.8;
-      ctx.beginPath(); ctx.moveTo(X[0], X[1]); ctx.lineTo(r.end[0], r.end[1]); ctx.stroke();
-      ctx.restore();
-    });
-    if (bead && hot >= 0) {
-      ctx.save(); ctx.fillStyle = COLORS[hot]; ctx.shadowColor = COLORS[hot]; ctx.shadowBlur = 12;
-      ctx.beginPath(); ctx.arc(bead[0], bead[1], 4.2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(bead[0], bead[1], 1.6, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    }
-
-    // a few slow motes of light along the rays
-    if (!reduce && Math.random() < 0.08) {
-      const r = rays[Math.floor(Math.random() * 5)];
-      motes.push({ r, p: 0.05, v: 0.0025 + Math.random() * 0.002 });
-    }
-    motes = motes.filter(m => m.p < 0.7);
-    motes.forEach(m => {
-      m.p += m.v; const pt = mix(X, m.r.end, m.p);
-      ctx.globalAlpha = Math.sin(Math.PI * m.p / 0.7) * 0.55; ctx.fillStyle = m.r.c;
-      ctx.beginPath(); ctx.arc(pt[0], pt[1], 1.8, 0, Math.PI * 2); ctx.fill();
+    // stars: slow drift, parallax with the cursor by depth, twinkle
+    stars.forEach(s => {
+      s.x -= 0.04 * s.z; if (s.x < -4) s.x = W + 4;
+      const x = s.x - par[0] * 26 * s.z, y = s.y - par[1] * 18 * s.z;
+      const tw = 0.55 + 0.45 * Math.sin(k * s.sp + s.ph);
+      ctx.globalAlpha = (0.25 + 0.75 * s.z) * tw; ctx.fillStyle = "#DCE8FF";
+      ctx.beginPath(); ctx.arc(x, y, 0.4 + s.z * 1.1, 0, Math.PI * 2); ctx.fill();
     });
     ctx.globalAlpha = 1;
 
-    // the prism (lifts slightly on hover)
-    const sc = 1 + hp * 0.035;
-    ctx.save();
-    ctx.translate(G.cx, G.cy); ctx.scale(sc, sc); ctx.translate(-G.cx, -G.cy - hp * 4);
-    ctx.save();
-    ctx.shadowColor = `rgba(31,78,121,${0.18 + hp * 0.12})`; ctx.shadowBlur = 30 + hp * 16; ctx.shadowOffsetY = 12 + hp * 6;
-    const pg = ctx.createLinearGradient(G.C[0], G.A[1], G.B[0], G.B[1]);
-    pg.addColorStop(0, "rgba(232,240,248,0.96)"); pg.addColorStop(0.55, "rgba(186,206,226,0.92)");
-    pg.addColorStop(1, "rgba(122,156,190,0.92)");
-    ctx.fillStyle = pg; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(...G.A); ctx.lineTo(...G.B); ctx.lineTo(...G.C); ctx.closePath(); ctx.fill();
-    ctx.restore();
-    ctx.strokeStyle = "rgba(31,78,121,0.85)"; ctx.lineWidth = 1.6; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(...G.A); ctx.lineTo(...G.B); ctx.lineTo(...G.C); ctx.closePath(); ctx.stroke();
-    // highlight along the left face
-    const h1 = mix(G.A, G.C, 0.16), h2 = mix(G.A, G.C, 0.80);
-    ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 1.4;
-    ctx.beginPath(); ctx.moveTo(h1[0] + 7, h1[1] + 3); ctx.lineTo(h2[0] + 9, h2[1] - 3); ctx.stroke();
-    // light inside the glass
-    ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.moveTo(...E); ctx.lineTo(...X); ctx.stroke();
-    if (hp > 0.02) {   // soft gold rim when hovered
-      ctx.strokeStyle = `rgba(192,138,46,${0.55 * hp})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(...G.A); ctx.lineTo(...G.B); ctx.lineTo(...G.C); ctx.closePath(); ctx.stroke();
+    // shooting stars
+    if (!reduce && now - t0 > nextMeteor) {
+      meteors.push({ x: W * (0.3 + Math.random() * 0.7), y: H * Math.random() * 0.4, born: now });
+      nextMeteor = now - t0 + 5000 + Math.random() * 6000;
     }
+    meteors = meteors.filter(m => now - m.born < 900);
+    meteors.forEach(m => {
+      const q = (now - m.born) / 900, x = m.x - q * W * 0.35, y = m.y + q * H * 0.22;
+      const g = ctx.createLinearGradient(x, y, x + 60, y - 38);
+      g.addColorStop(0, `rgba(255,255,255,${0.8 * (1 - q)})`); g.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.strokeStyle = g; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 60, y - 38); ctx.stroke();
+    });
+
+    // the guiding star (cursor) and its beam
+    const goal = idle
+      ? [W * 0.10, P.c[1] + Math.sin(k * 0.45) * H * 0.18]
+      : [Math.min(Math.max(target[0], W * 0.04), P.C[0] - 40), Math.min(Math.max(target[1], H * 0.08), H * 0.92)];
+    src = src ? mix(src, goal, 0.12) : goal;
+    const t = Math.max(0.3, Math.min(0.8, 0.55 + (src[1] - P.c[1]) / (P.s * 1.8)));
+    const E = mix(P.A, P.C, t), X = mix(P.A, P.B, Math.min(0.85, t + 0.06));
+    const inc = Math.atan2(E[1] - src[1], E[0] - src[0]);
+    const centre = 0.08 + inc * 0.6, spread = 0.34 + Math.min(0.3, Math.abs(inc) * 0.45);
+
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    const bg = ctx.createLinearGradient(src[0], src[1], E[0], E[1]);
+    bg.addColorStop(0, "rgba(255,236,200,0.05)"); bg.addColorStop(1, "rgba(255,236,200,0.55)");
+    ctx.strokeStyle = bg; ctx.lineWidth = 8; ctx.filter = "blur(6px)";
+    ctx.beginPath(); ctx.moveTo(...src); ctx.lineTo(...E); ctx.stroke();
+    ctx.filter = "none";
+    // a stream of starlight motes flowing into the crystal
+    const n = 26, len = Math.hypot(E[0] - src[0], E[1] - src[1]);
+    for (let j = 0; j < n; j++) {
+      const q = ((k * 0.55 + j / n) % 1), pt = mix(src, E, q);
+      const wob = Math.sin(j * 12.9 + k * 3) * 1.6;
+      const nx = -(E[1] - src[1]) / len, ny = (E[0] - src[0]) / len;
+      ctx.globalAlpha = 0.25 + 0.6 * q; ctx.fillStyle = "#FFEFD2";
+      ctx.beginPath(); ctx.arc(pt[0] + nx * wob, pt[1] + ny * wob, 0.8 + q * 1.1, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // nebula plumes: soft clouds of colour, not hard stripes
+    const L = W * 0.52;
+    PLUMES.forEach((col, i) => {
+      const a = centre + spread * (i / 4 - 0.5), w = spread / 5;
+      const p1 = [X[0] + Math.cos(a - w) * L, X[1] + Math.sin(a - w) * L];
+      const p2 = [X[0] + Math.cos(a + w) * L, X[1] + Math.sin(a + w) * L];
+      const mid = [X[0] + Math.cos(a) * L * 0.5, X[1] + Math.sin(a) * L * 0.5];
+      const rg = ctx.createRadialGradient(mid[0], mid[1], 0, mid[0], mid[1], L * 0.6);
+      rg.addColorStop(0, col + "99"); rg.addColorStop(1, col + "00");
+      ctx.fillStyle = rg; ctx.filter = "blur(20px)";
+      ctx.beginPath(); ctx.moveTo(...X); ctx.lineTo(...p1); ctx.lineTo(...p2); ctx.closePath(); ctx.fill();
+      ctx.filter = "none";
+      // stardust
+      if (!reduce && Math.random() < 0.22)
+        dust.push({ x: X[0], y: X[1], a: a + (Math.random() - 0.5) * w * 2,
+                    v: 0.5 + Math.random() * 0.9, life: 0, col });
+    });
+    dust = dust.filter(d => d.life < 1).slice(-500);
+    dust.forEach(d => {
+      d.life += 0.006; d.a += Math.sin(d.life * 9 + d.v * 7) * 0.006;   // gentle swirl
+      d.x += Math.cos(d.a) * d.v; d.y += Math.sin(d.a) * d.v;
+      ctx.globalAlpha = Math.sin(Math.PI * d.life) * 0.9; ctx.fillStyle = d.col;
+      ctx.beginPath(); ctx.arc(d.x, d.y, 1.1, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.globalAlpha = 1; ctx.restore();
+
+    // the crystal: an extruded glass prism with a visible depth face
+    const poly = (pts, fill, stroke, lw) => {
+      ctx.beginPath(); ctx.moveTo(...pts[0]); pts.slice(1).forEach(p => ctx.lineTo(...p)); ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+    };
+    ctx.lineJoin = "round";
+    ctx.save();
+    ctx.shadowColor = `rgba(110,160,230,${0.30 + glow * 0.35})`; ctx.shadowBlur = 34 + glow * 26;
+    poly([P.A, P.B, P.B2, P.A2], "rgba(150,190,240,0.10)");                 // right face (glow source)
     ctx.restore();
+    poly([P.A2, P.B2, P.C2], "rgba(120,160,215,0.06)", "rgba(170,200,240,0.22)", 1);   // back face
+    const top = ctx.createLinearGradient(P.A[0], P.A[1], P.B2[0], P.B2[1]);
+    top.addColorStop(0, `rgba(200,225,255,${0.22 + glow * 0.1})`); top.addColorStop(1, "rgba(120,160,215,0.08)");
+    poly([P.A, P.B, P.B2, P.A2], top, "rgba(190,215,250,0.45)", 1);          // right/top face
+    poly([P.A, P.C, P.C2, P.A2], "rgba(140,180,230,0.07)", "rgba(170,200,240,0.25)", 1); // left face
+    const fr = ctx.createLinearGradient(P.C[0], P.A[1], P.B[0], P.B[1]);
+    fr.addColorStop(0, `rgba(185,215,250,${0.26 + glow * 0.08})`);
+    fr.addColorStop(0.6, "rgba(100,140,200,0.14)"); fr.addColorStop(1, "rgba(50,80,130,0.20)");
+    const rim = ctx.createLinearGradient(P.C[0], P.A[1], P.B[0], P.B[1]);
+    rim.addColorStop(0, "rgba(230,242,255,0.95)"); rim.addColorStop(1, "rgba(150,185,230,0.6)");
+    poly([P.A, P.B, P.C], fr, rim, 1.4 + glow * 0.6);                       // front face
+    const h1 = mix(P.A, P.C, 0.18), h2 = mix(P.A, P.C, 0.78);
+    ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(h1[0] + 7, h1[1] + 3); ctx.lineTo(h2[0] + 9, h2[1] - 3); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,240,220,0.55)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(...E); ctx.lineTo(...X); ctx.stroke();
 
-    // source and exit points
-    ctx.fillStyle = "#C08A2E";
-    ctx.beginPath(); ctx.arc(src[0], src[1], 3.2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "rgba(224,177,92,0.9)";
-    ctx.beginPath(); ctx.arc(X[0], X[1], 2.6, 0, Math.PI * 2); ctx.fill();
+    // stars at the source and exit
+    sparkle(src[0], src[1], 3.2, 1, "#FFE9C2");
+    sparkle(X[0], X[1], 2.2, 0.85 + 0.15 * Math.sin(k * 3), "#FFF4E0");
 
-    // ripple on click
-    ripples = ripples.filter(r => now - r.born < 1400);
-    ripples.forEach(r => {
-      const q = (now - r.born) / 1400, e = 1 - Math.pow(1 - q, 3);
-      ctx.strokeStyle = `rgba(192,138,46,${0.45 * (1 - q)})`; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(X[0], X[1], 6 + e * G.s * 0.9, 0, Math.PI * 2); ctx.stroke();
+    // starburst on click
+    bursts = bursts.filter(b => now - b.born < 1500);
+    bursts.forEach(b => {
+      const q = (now - b.born) / 1500, e = 1 - Math.pow(1 - q, 3);
+      ctx.strokeStyle = `rgba(255,232,190,${0.5 * (1 - q)})`; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(P.c[0], P.c[1], P.s * 0.3 + e * P.s * 1.2, 0, Math.PI * 2); ctx.stroke();
+      if (q < 0.08) for (let j = 0; j < 14; j++)
+        dust.push({ x: P.c[0], y: P.c[1], a: Math.random() * Math.PI * 2, v: 0.8 + Math.random() * 1.6,
+                    life: 0.1, col: PLUMES[j % 5] });
     });
 
     if (!reduce) requestAnimationFrame(frame);

@@ -1,9 +1,10 @@
 """
 Home: what PRISM is, in as few words as possible.
 
-  Hero      "Every return has a spectrum." over an interactive prism: the
-            beam follows the cursor; drag the prism to turn it; hold to
-            charge the light, release for a pulse; hover a ray to light it.
+  Hero      "Every return has a spectrum." beside a small space scene: a
+            glass crystal among stars; a star you steer with the cursor
+            sends starlight into it, which leaves as nebula in PRISM's
+            colours. Hover lights the crystal, click sends a starburst.
             Drifts by itself on touch screens or when idle.
   Numbers   a strip of live facts from the data
   Lenses    one card per tool, each showing its own animation
