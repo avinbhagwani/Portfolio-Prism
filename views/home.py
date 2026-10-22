@@ -49,12 +49,21 @@ CSS = """
 <style>
 .ph-eyebrow {font-size:0.8rem; letter-spacing:0.18em; text-transform:uppercase;
   color:#1F4E79; font-weight:600; margin:0 0 0.5rem 0;}
-.ph-title {font-size:3rem; font-weight:700; color:#1B2533; line-height:1.05;
-  letter-spacing:-0.025em; margin:0 0 0.7rem 0;}
+.ph-title {font-size:3.1rem; font-weight:700; color:#1B2533; line-height:1.06;
+  letter-spacing:-0.028em; margin:0 0 1rem 0;}
 .ph-title span {background: linear-gradient(90deg, #1F4E79, #2F8F9D 30%, #C08A2E 55%, #5E9A62 75%, #8E5B9F);
   -webkit-background-clip: text; background-clip: text; color: transparent;}
-.ph-sub {font-size:1.15rem; color:#5B6572; line-height:1.5; max-width:38rem; margin:0;}
-.ph-stats {display:flex; gap:2.4rem; flex-wrap:wrap; margin:0.6rem 0 0.4rem 0;
+.ph-sub {font-size:1.12rem; color:#5B6572; line-height:1.55; max-width:30rem; margin:0 0 1.6rem 0;}
+.st-key-ph_ctas a {border-radius:999px !important; padding:0.55rem 1.2rem !important;
+  font-weight:500; transition:background 0.15s ease, border-color 0.15s ease;}
+.st-key-ph_ctas a p {font-size:0.95rem !important; font-weight:500 !important;}
+.st-key-ph_cta_primary a {background:#1F4E79 !important; border:1px solid #1F4E79 !important;}
+.st-key-ph_cta_primary a p, .st-key-ph_cta_primary a span {color:#FFFFFF !important;}
+.st-key-ph_cta_primary a:hover {background:#173E61 !important;}
+.st-key-ph_cta_secondary a {background:#FFFFFF !important; border:1px solid #D5DCE3 !important;}
+.st-key-ph_cta_secondary a p, .st-key-ph_cta_secondary a span {color:#1F4E79 !important;}
+.st-key-ph_cta_secondary a:hover {background:#F4F7FA !important; border-color:#B9C4CF !important;}
+.ph-stats {display:flex; gap:2.4rem; flex-wrap:wrap; margin:1.6rem 0 0.4rem 0;
   padding:1rem 0; border-top:1px solid #ECEFF2; border-bottom:1px solid #ECEFF2;}
 .ph-stat b {display:block; font-size:1.6rem; font-weight:700; color:#1B2533;
   letter-spacing:-0.02em; font-variant-numeric:tabular-nums;}
@@ -94,16 +103,27 @@ def _stats():
 
 def render():
     st.markdown(CSS, unsafe_allow_html=True)
-    st.markdown(
-        "<div class='ph-eyebrow'>PRISM</div>"
-        "<div class='ph-title'>Every return has a <span>spectrum</span>.</div>"
-        "<div class='ph-sub'>PRISM looks through Indian funds, indices and "
-        "portfolios to show what really drives them.</div>",
-        unsafe_allow_html=True,
-    )
-
-    components.html((STATIC / "home-prism.html").read_text(encoding="utf-8"),
-                    height=380)
+    left, right = st.columns([1, 1.15], gap="large", vertical_alignment="center")
+    with left:
+        st.markdown(
+            "<div class='ph-eyebrow'>PRISM</div>"
+            "<div class='ph-title'>Every return has a <span>spectrum</span>.</div>"
+            "<div class='ph-sub'>PRISM looks through Indian funds, indices and "
+            "portfolios to show what really drives them.</div>",
+            unsafe_allow_html=True,
+        )
+        with st.container(key="ph_ctas", horizontal=True, gap="small"):
+            if "factor-analysis" in PAGES:
+                with st.container(key="ph_cta_primary", width="content"):
+                    st.page_link(PAGES["factor-analysis"], label="Analyse a fund",
+                                 icon=":material/arrow_forward:", icon_position="right")
+            if "fbi-intelligence" in PAGES:
+                with st.container(key="ph_cta_secondary", width="content"):
+                    st.page_link(PAGES["fbi-intelligence"], label="Explore indices",
+                                 icon=":material/query_stats:")
+    with right:
+        components.html((STATIC / "home-prism.html").read_text(encoding="utf-8"),
+                        height=400)
 
     n_idx, years, n_models = _stats()
     st.markdown(
