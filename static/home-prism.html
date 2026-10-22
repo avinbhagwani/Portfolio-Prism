@@ -5,6 +5,7 @@
 <style>
   html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
                user-select: none; -webkit-user-select: none; }
+  body { perspective: 1100px; height: 100vh; }
   .panel {
     position: absolute; inset: 6px; border-radius: 24px; overflow: hidden;
     background:
@@ -12,6 +13,7 @@
       linear-gradient(160deg, #F4F7FA 0%, #EEF3F8 55%, #F7F5F0 100%);
     border: 1px solid #E6EBF0;
     box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 12px 32px rgba(16,24,40,0.06);
+    transform-origin: 50% 50%; will-change: transform;
   }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
            /* soft edges: nothing is ever cut off by the panel border */
@@ -20,12 +22,16 @@
 </style>
 </head>
 <body>
-<div class="panel"><canvas id="c"></canvas></div>
+<div class="panel" id="panel"><canvas id="c"></canvas></div>
 <script>
 /*
-  Calm, contained prism. The light source eases toward the cursor (or
-  drifts when idle); the spectrum glides as the angle of incidence changes.
-  A click sends one soft ripple. Every value is smoothed, nothing jumps.
+  Minimal, interactive prism. Every value is eased, nothing jumps.
+    move         the light follows the cursor; the spectrum swings with it,
+                 and the panel tilts slightly toward the cursor in 3D
+    hover prism  the prism lifts and glows; the rays brighten
+    hover a ray  that ray lights up, the rest dim, a bead rides along it
+    click        a soft ripple and a brief flare of the spectrum
+  Idle or touch: the light drifts on its own.
 */
 (() => {
   const COLORS = ["#1F4E79", "#2F8F9D", "#C08A2E", "#5E9A62", "#8E5B9F"];
@@ -34,6 +40,8 @@
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   let W = 0, H = 0, target = null, lastMove = -1e9, t0 = performance.now();
   let src = null, ripples = [], motes = [];
+  let hp = 0, flare = 0, tiltX = 0, tiltY = 0, rayHot = [0, 0, 0, 0, 0];
+  const panel = document.getElementById("panel");
 
   function resize() {
     const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -45,7 +53,19 @@
   const local = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
   window.addEventListener("pointermove", e => { target = local(e); lastMove = performance.now(); });
   window.addEventListener("pointerleave", () => { target = null; });
-  window.addEventListener("pointerdown", () => ripples.push({ born: performance.now() }));
+  window.addEventListener("pointerdown", () => { ripples.push({ born: performance.now() }); flare = 1; });
+
+  function inTriangle(p, G) {
+    const sg = (a, b, c) => (a[0] - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (a[1] - c[1]);
+    const d1 = sg(p, G.A, G.B), d2 = sg(p, G.B, G.C), d3 = sg(p, G.C, G.A);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  }
+  function project(p, a, b) {   // closest point on segment a-b, and its distance
+    const vx = b[0] - a[0], vy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / (vx * vx + vy * vy)));
+    const q = [a[0] + t * vx, a[1] + t * vy];
+    return { q, t, d: Math.hypot(p[0] - q[0], p[1] - q[1]) };
+  }
 
   const lerp = (a, b, t) => a + (b - a) * t;
   const mix = (p, q, t) => [lerp(p[0], q[0], t), lerp(p[1], q[1], t)];
@@ -64,14 +84,23 @@
     const k = (now - t0) / 1000;
     const goal = idle
       ? [W * 0.08, G.cy + Math.sin(k * 0.5) * H * 0.16]
-      : [Math.min(Math.max(target[0], W * 0.03), G.C[0] - 40), Math.min(Math.max(target[1], H * 0.18), H * 0.86)];
-    src = src ? mix(src, goal, 0.07) : goal;
+      : [Math.min(Math.max(target[0], W * 0.03), G.C[0] - 40), Math.min(Math.max(target[1], H * 0.08), H * 0.94)];
+    src = src ? mix(src, goal, 0.14) : goal;
+
+    // eased states: prism hover, click flare, 3D tilt of the panel
+    const overPrism = target && !idle && inTriangle(target, G);
+    hp = lerp(hp, overPrism ? 1 : 0, 0.12);
+    flare *= 0.94;
+    const tx = target && !idle ? (target[1] / H - 0.5) * -6 : 0;
+    const ty = target && !idle ? (target[0] / W - 0.5) * 8 : 0;
+    tiltX = lerp(tiltX, tx, 0.08); tiltY = lerp(tiltY, ty, 0.08);
+    panel.style.transform = `rotateX(${tiltX.toFixed(2)}deg) rotateY(${tiltY.toFixed(2)}deg)`;
 
     // entry on the left face, exit on the right face
     const t = Math.max(0.3, Math.min(0.8, 0.55 + (src[1] - G.cy) / (G.s * 1.8)));
     const E = mix(G.A, G.C, t), X = mix(G.A, G.B, Math.min(0.85, t + 0.06));
     const inc = Math.atan2(E[1] - src[1], E[0] - src[0]);
-    const centre = 0.10 + inc * 0.5, spread = 0.30 + Math.min(0.28, Math.abs(inc) * 0.45);
+    const centre = 0.10 + inc * 0.62, spread = (0.30 + Math.min(0.34, Math.abs(inc) * 0.5)) * (1 + flare * 0.25);
 
     ctx.clearRect(0, 0, W, H);
 
@@ -87,18 +116,39 @@
       const a = centre + spread * (i / 4 - 0.5);
       return { c, end: [X[0] + Math.cos(a) * L, X[1] + Math.sin(a) * L] };
     });
-    ctx.save(); ctx.globalAlpha = 0.16; ctx.filter = "blur(14px)";
+    // which ray is under the cursor (if any)
+    let hot = -1, bead = null;
+    if (target && !idle && !overPrism) {
+      let best = 12;
+      rays.forEach((r, i) => { const pr = project(target, X, r.end);
+        if (pr.t > 0.04 && pr.t < 0.85 && pr.d < best) { best = pr.d; hot = i; bead = pr.q; } });
+    }
+    rayHot = rayHot.map((v, i) => lerp(v, i === hot ? 1 : 0, 0.15));
+    const anyHot = Math.max(...rayHot);
+    cv.style.cursor = overPrism || hot >= 0 ? "pointer" : "default";
+
+    ctx.save(); ctx.globalAlpha = 0.16 + hp * 0.08 + flare * 0.2 - anyHot * 0.08; ctx.filter = "blur(14px)";
     ctx.beginPath(); ctx.moveTo(X[0], X[1]); ctx.lineTo(...rays[0].end); ctx.lineTo(...rays[4].end); ctx.closePath();
     const fan = ctx.createLinearGradient(...rays[0].end, ...rays[4].end);
     COLORS.forEach((c, i) => fan.addColorStop(i / 4, c));
     ctx.fillStyle = fan; ctx.fill(); ctx.restore();
 
-    rays.forEach(r => {
+    rays.forEach((r, i) => {
       const rg = ctx.createLinearGradient(X[0], X[1], r.end[0], r.end[1]);
       rg.addColorStop(0, r.c); rg.addColorStop(0.45, r.c + "AA"); rg.addColorStop(0.9, r.c + "00");
-      ctx.strokeStyle = rg; ctx.lineWidth = 2.2;
+      ctx.save();
+      ctx.globalAlpha = 1 - anyHot * 0.7 * (1 - rayHot[i]);
+      if (rayHot[i] > 0.05 || flare > 0.05) { ctx.shadowColor = r.c; ctx.shadowBlur = 14 * Math.max(rayHot[i], flare); }
+      ctx.strokeStyle = rg; ctx.lineWidth = 2.2 + hp * 0.8 + flare * 1.4 + rayHot[i] * 1.8;
       ctx.beginPath(); ctx.moveTo(X[0], X[1]); ctx.lineTo(r.end[0], r.end[1]); ctx.stroke();
+      ctx.restore();
     });
+    if (bead && hot >= 0) {
+      ctx.save(); ctx.fillStyle = COLORS[hot]; ctx.shadowColor = COLORS[hot]; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(bead[0], bead[1], 4.2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#FFFFFF"; ctx.beginPath(); ctx.arc(bead[0], bead[1], 1.6, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
 
     // a few slow motes of light along the rays
     if (!reduce && Math.random() < 0.08) {
@@ -113,9 +163,12 @@
     });
     ctx.globalAlpha = 1;
 
-    // the prism
+    // the prism (lifts slightly on hover)
+    const sc = 1 + hp * 0.035;
     ctx.save();
-    ctx.shadowColor = "rgba(31,78,121,0.18)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12;
+    ctx.translate(G.cx, G.cy); ctx.scale(sc, sc); ctx.translate(-G.cx, -G.cy - hp * 4);
+    ctx.save();
+    ctx.shadowColor = `rgba(31,78,121,${0.18 + hp * 0.12})`; ctx.shadowBlur = 30 + hp * 16; ctx.shadowOffsetY = 12 + hp * 6;
     const pg = ctx.createLinearGradient(G.C[0], G.A[1], G.B[0], G.B[1]);
     pg.addColorStop(0, "rgba(232,240,248,0.96)"); pg.addColorStop(0.55, "rgba(186,206,226,0.92)");
     pg.addColorStop(1, "rgba(122,156,190,0.92)");
@@ -131,6 +184,11 @@
     // light inside the glass
     ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 1.6;
     ctx.beginPath(); ctx.moveTo(...E); ctx.lineTo(...X); ctx.stroke();
+    if (hp > 0.02) {   // soft gold rim when hovered
+      ctx.strokeStyle = `rgba(192,138,46,${0.55 * hp})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(...G.A); ctx.lineTo(...G.B); ctx.lineTo(...G.C); ctx.closePath(); ctx.stroke();
+    }
+    ctx.restore();
 
     // source and exit points
     ctx.fillStyle = "#C08A2E";
