@@ -59,6 +59,7 @@ PAGE_ANIMATIONS = {
     "fbi-intelligence": _svg("anim-fbi-intelligence.svg"),   # indices race a benchmark
     "drawdown-analysis": _svg("anim-drawdown-analysis.svg"), # fall, underwater, recovery
     "writing": _svg("anim-writing.svg"),                     # a page being written
+    "try-to-time": _svg("anim-try-to-time.svg"),             # the order reshuffles
 }
 # Text in the intro finishes about 2.45 s in; take whichever ends later.
 INTRO_FADE = round(max(_animation_end(INTRO_SVG), 2.45) + HOLD + 0.2, 2)

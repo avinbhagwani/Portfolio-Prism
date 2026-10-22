@@ -84,6 +84,10 @@ CSS = """
   text-transform:uppercase; color:#9A6B1E; background:#FBF3E4; padding:2px 8px; border-radius:999px;}
 .ph-soon-title {font-size:1rem; font-weight:600; color:#4A5562; margin:0.5rem 0 0.2rem 0;}
 .ph-soon-sub {font-size:0.88rem; color:#8A939E; line-height:1.45;}
+.ph-play-title {font-size:1.25rem; font-weight:600; color:#1B2533; margin:0.1rem 0 0.2rem 0;}
+.ph-play-sub {font-size:0.95rem; color:#6B7480; line-height:1.5;}
+.ph-play-bars {display:flex; flex-direction:column; gap:5px; padding:4px 0;}
+.ph-play-bars i {display:block; height:12px; border-radius:4px;}
 .ph-latest-meta {font-size:0.78rem; color:#9A6B1E; font-weight:600; letter-spacing:0.05em;
   text-transform:uppercase;}
 .ph-latest-title {font-size:1.2rem; font-weight:600; color:#1B2533; margin:0.15rem 0 0.2rem 0;}
@@ -155,8 +159,33 @@ def render():
                 st.page_link(PAGES[path], label=f"Open {title}",
                              icon=":material/arrow_forward:")
 
+    _play()
     _on_the_way()
     _latest_article()
+
+
+def _play():
+    if "try-to-time" not in PAGES:
+        return
+    st.markdown("<div class='ph-section'>Play</div>", unsafe_allow_html=True)
+    with st.container(border=True):
+        a, b = st.columns([1, 4], gap="medium", vertical_alignment="center")
+        with a:
+            bars = "".join(f"<i style='background:{c};width:{w}%'></i>" for c, w in
+                           [("#C08A2E", 92), ("#2F6FB0", 74), ("#8E5B9F", 66),
+                            ("#5E9A62", 48), ("#2F8F9D", 37)])
+            st.markdown(f"<div class='ph-play-bars'>{bars}</div>", unsafe_allow_html=True)
+        with b:
+            st.markdown(
+                "<div class='ph-latest-meta'>Game</div>"
+                "<div class='ph-play-title'>Think you can time the factors?</div>"
+                "<div class='ph-play-sub'>Back next year's winning index, every year "
+                "from 2008, using only what was known at the time. Then see how you did "
+                "against simply holding all five.</div>",
+                unsafe_allow_html=True,
+            )
+            st.page_link(PAGES["try-to-time"], label="Play Try to Time",
+                         icon=":material/arrow_forward:")
 
 
 def _on_the_way():
