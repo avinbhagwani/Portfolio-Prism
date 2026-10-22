@@ -1,12 +1,14 @@
 """
 Home: what PRISM is, in as few words as possible.
 
-  Hero      "Every return has a spectrum." over an interactive prism: a beam
-            follows the cursor into the prism and splits into five factor
-            rays (Market, Size, Value, Momentum, Quality). Click sends a
-            pulse; it drifts by itself on touch screens or when idle.
+  Hero      "Every return has a spectrum." over an interactive prism: the
+            beam follows the cursor; drag the prism to turn it; hold to
+            charge the light, release for a pulse; hover a ray to light it.
+            Drifts by itself on touch screens or when idle.
   Numbers   a strip of live facts from the data
   Lenses    one card per tool, each showing its own animation
+  Soon      what's coming (retirement planning, portfolio attribution,
+            efficient frontier)
   Writing   the latest Substack article
 
 The interactive prism is static/home-prism.html in a component iframe,
@@ -37,6 +39,12 @@ LENSES = [
      "How far an index fell, and how long it took to recover."),
 ]
 
+SOON = [
+    ("Retirement planning", "Will the money last? Plan income for every stage."),
+    ("Portfolio attribution", "Which decisions added return, and which cost it."),
+    ("Efficient frontier", "The best mix for the risk you can take."),
+]
+
 CSS = """
 <style>
 .ph-eyebrow {font-size:0.8rem; letter-spacing:0.18em; text-transform:uppercase;
@@ -57,6 +65,12 @@ CSS = """
 .ph-card-art img {display:block; width:100%; height:auto;}
 .ph-card-title {font-size:1.08rem; font-weight:600; color:#1B2533; margin:0.1rem 0 0.25rem 0;}
 .ph-card-sub {font-size:0.9rem; color:#6B7480; line-height:1.45; min-height:2.6rem;}
+.ph-soon-row {display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px;}
+.ph-soon {border:1px dashed #D5DCE3; border-radius:12px; padding:16px 18px; background:#FBFCFD;}
+.ph-soon-pill {display:inline-block; font-size:0.68rem; font-weight:600; letter-spacing:0.08em;
+  text-transform:uppercase; color:#9A6B1E; background:#FBF3E4; padding:2px 8px; border-radius:999px;}
+.ph-soon-title {font-size:1rem; font-weight:600; color:#4A5562; margin:0.5rem 0 0.2rem 0;}
+.ph-soon-sub {font-size:0.88rem; color:#8A939E; line-height:1.45;}
 .ph-latest-meta {font-size:0.78rem; color:#9A6B1E; font-weight:600; letter-spacing:0.05em;
   text-transform:uppercase;}
 .ph-latest-title {font-size:1.2rem; font-weight:600; color:#1B2533; margin:0.15rem 0 0.2rem 0;}
@@ -83,8 +97,8 @@ def render():
     st.markdown(
         "<div class='ph-eyebrow'>PRISM</div>"
         "<div class='ph-title'>Every return has a <span>spectrum</span>.</div>"
-        "<div class='ph-sub'>PRISM splits Indian funds and indices into the "
-        "factors that really drive them.</div>",
+        "<div class='ph-sub'>PRISM looks through Indian funds, indices and "
+        "portfolios to show what really drives them.</div>",
         unsafe_allow_html=True,
     )
 
@@ -116,7 +130,18 @@ def render():
                 st.page_link(PAGES[path], label=f"Open {title}",
                              icon=":material/arrow_forward:")
 
+    _on_the_way()
     _latest_article()
+
+
+def _on_the_way():
+    st.markdown("<div class='ph-section'>On the way</div>", unsafe_allow_html=True)
+    cards = "".join(
+        f"<div class='ph-soon'><span class='ph-soon-pill'>Soon</span>"
+        f"<div class='ph-soon-title'>{t}</div><div class='ph-soon-sub'>{d}</div></div>"
+        for t, d in SOON
+    )
+    st.markdown(f"<div class='ph-soon-row'>{cards}</div>", unsafe_allow_html=True)
 
 
 def _latest_article():

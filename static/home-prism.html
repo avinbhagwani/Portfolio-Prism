@@ -4,59 +4,115 @@
 <meta charset="utf-8">
 <style>
   @font-face { font-family: Inter; src: url("/app/static/fonts/Inter-Medium.woff2") format("woff2"); font-weight: 500; }
-  @font-face { font-family: Inter; src: url("/app/static/fonts/Inter-SemiBold.woff2") format("woff2"); font-weight: 600; }
-  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden;
+               user-select: none; -webkit-user-select: none; touch-action: none; }
   canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
   .hint { position: absolute; left: 14px; bottom: 10px; font: 500 12px Inter, sans-serif;
-          color: #9AA3AE; letter-spacing: 0.02em; transition: opacity 0.6s ease; pointer-events: none; }
+          color: #9AA3AE; letter-spacing: 0.02em; transition: opacity 0.8s ease; pointer-events: none; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div class="hint" id="hint">Move your cursor to bend the light · click to send a pulse</div>
+<div class="hint" id="hint">Move to bend the light &middot; drag the prism to turn it &middot; hold to charge</div>
 <script>
+/*
+  PRISM home hero. Interactions:
+    move        the light source follows the cursor; the beam bends and the
+                spectrum fans differently
+    drag prism  rotate the prism; refraction follows
+    hold        charge the beam (thicker, brighter, wider spectrum);
+                release sends a pulse whose size matches the charge
+    hover ray   highlight that ray, dim the rest
+  Idle or touch-only: the source drifts on its own.
+*/
 (() => {
-  const FACTORS = [
-    ["Market",   "#1F4E79"],
-    ["Size",     "#2F8F9D"],
-    ["Value",    "#C08A2E"],
-    ["Momentum", "#5E9A62"],
-    ["Quality",  "#8E5B9F"],
-  ];
+  const COLORS = ["#1F4E79", "#2F8F9D", "#C08A2E", "#5E9A62", "#8E5B9F"];
   const cv = document.getElementById("c");
   const ctx = cv.getContext("2d");
   const hint = document.getElementById("hint");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let W = 0, H = 0, dpr = 1;
-  let mouse = null, lastMove = 0, pulses = [], particles = [], t0 = performance.now();
+  let W = 0, H = 0;
+  let mouse = null, lastMove = 0, t0 = performance.now();
+  let rot = 0, tilt = 0;                       // prism rotation (drag) and parallax tilt
+  let drag = null;                             // {startAngle, startRot}
+  let charging = null, charge = 0;             // hold-to-charge
+  let pulses = [], particles = [], hoverRay = -1;
 
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    W = cv.clientWidth = window.innerWidth; H = cv.clientHeight = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
     cv.width = W * dpr; cv.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   window.addEventListener("resize", resize); resize();
 
+  // ---------- geometry ----------
+  function base() {
+    const s = Math.min(H * 0.62, W * 0.24);
+    return { s, cx: W * 0.5, cy: H * 0.56 };
+  }
+  function rotate(p, c, a) {
+    const dx = p[0] - c[0], dy = p[1] - c[1], cs = Math.cos(a), sn = Math.sin(a);
+    return [c[0] + dx * cs - dy * sn, c[1] + dx * sn + dy * cs];
+  }
+  function prism() {
+    const { s, cx, cy } = base(), h = s * Math.sqrt(3) / 2, c = [cx, cy];
+    const a = rot + tilt;
+    return {
+      A: rotate([cx, cy - h * 0.62], c, a),
+      B: rotate([cx + s / 2, cy + h * 0.38], c, a),
+      C: rotate([cx - s / 2, cy + h * 0.38], c, a),
+      s, cx, cy, a,
+    };
+  }
+  const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  function inTriangle(p, P) {
+    const sign = (p1, p2, p3) => (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1]);
+    const d1 = sign(p, P.A, P.B), d2 = sign(p, P.B, P.C), d3 = sign(p, P.C, P.A);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  }
+  function distToSeg(p, a, b) {
+    const vx = b[0] - a[0], vy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vy) / (vx * vx + vy * vy)));
+    return Math.hypot(p[0] - (a[0] + t * vx), p[1] - (a[1] + t * vy));
+  }
+
+  // ---------- input ----------
+  function pos(e) { return [e.clientX, e.clientY]; }
   window.addEventListener("pointermove", e => {
     mouse = { x: e.clientX, y: e.clientY }; lastMove = performance.now();
     hint.style.opacity = 0;
+    const P = prism(), m = pos(e);
+    if (drag) {
+      const ang = Math.atan2(m[1] - P.cy, m[0] - P.cx);
+      // limited turn with a soft stop, so the light always exits forward
+      const raw = drag.startRot + (ang - drag.startAngle);
+      const lim = 0.52;
+      rot = Math.abs(raw) <= lim ? raw : Math.sign(raw) * (lim + (Math.abs(raw) - lim) * 0.15);
+      rot = Math.max(-0.65, Math.min(0.65, rot));
+    }
+    cv.style.cursor = drag ? "grabbing" : inTriangle(m, P) ? "grab" : "crosshair";
   });
-  window.addEventListener("pointerleave", () => { mouse = null; });
+  window.addEventListener("pointerleave", () => { mouse = null; endCharge(); drag = null; });
   window.addEventListener("pointerdown", e => {
-    pulses.push({ born: performance.now() });
-    mouse = { x: e.clientX, y: e.clientY }; lastMove = performance.now();
+    const P = prism(), m = pos(e);
+    mouse = { x: m[0], y: m[1] }; lastMove = performance.now();
+    if (inTriangle(m, P)) {
+      drag = { startAngle: Math.atan2(m[1] - P.cy, m[0] - P.cx), startRot: rot };
+      cv.style.cursor = "grabbing";
+    } else {
+      charging = performance.now();
+    }
   });
-
-  // geometry helpers
-  function prism() {
-    const s = Math.min(H * 0.62, W * 0.24);            // side length
-    const cx = W * 0.5, cy = H * 0.56;
-    const h = s * Math.sqrt(3) / 2;
-    return { A: [cx, cy - h * 0.62], B: [cx + s / 2, cy + h * 0.38], C: [cx - s / 2, cy + h * 0.38], s, cx, cy };
+  window.addEventListener("pointerup", () => { drag = null; endCharge(); });
+  // when released past the soft stop, ease back inside the limit
+  function settle() { if (!drag && Math.abs(rot) > 0.52) rot += (Math.sign(rot) * 0.52 - rot) * 0.12; }
+  function endCharge() {
+    if (charging !== null) { pulses.push({ born: performance.now(), k: 0.35 + charge }); }
+    charging = null;
   }
-  function lerp(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
 
+  // ---------- light source ----------
   function source(now, P) {
     const idle = !mouse || now - lastMove > 2500;
     let x, y;
@@ -65,121 +121,122 @@
       x = W * 0.08 + Math.sin(k * 0.45) * W * 0.03;
       y = P.cy + Math.sin(k * 0.7) * H * 0.22;
     } else {
-      x = Math.min(mouse.x, P.C[0] - 30); y = mouse.y;
+      x = Math.min(mouse.x, Math.min(P.A[0], P.B[0], P.C[0]) - 30); y = mouse.y;
     }
     return [Math.max(4, x), Math.max(8, Math.min(H - 8, y))];
   }
 
-  function rayLabel(x, y, text, color, alpha) {
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = color; ctx.font = "600 13px Inter, sans-serif";
-    ctx.textAlign = "right"; ctx.textBaseline = "middle";
-    ctx.fillText(text, x, y);
-    ctx.globalAlpha = 1;
-  }
-
+  // ---------- frame ----------
   function frame(now) {
+    // gentle parallax: the prism leans toward the cursor unless dragged
+    const target = (!drag && mouse) ? ((mouse.y / H) - 0.5) * 0.18 : 0;
+    tilt += (target - tilt) * 0.06;
+    settle();
+    // charge builds while held, eases away when released
+    charge = charging !== null ? Math.min(1, (now - charging) / 1200) : charge * 0.9;
+
     const P = prism();
     ctx.clearRect(0, 0, W, H);
 
-    // faint grid, like a chart
     ctx.strokeStyle = "rgba(31,78,121,0.06)"; ctx.lineWidth = 1;
     for (let gy = H * 0.15; gy < H; gy += H * 0.17) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
 
     const S = source(now, P);
-    // entry point on the left face: where the line from the source to the
-    // prism's centre crosses edge A-C (parameter along the edge)
     const dy = S[1] - P.cy;
     const tEntry = Math.max(0.25, Math.min(0.85, 0.55 + dy / (P.s * 1.6)));
     const E = lerp(P.A, P.C, tEntry);
-    // exit on the right face, mirrored a little lower (refraction bends down)
     const X = lerp(P.A, P.B, Math.max(0.3, Math.min(0.9, tEntry + 0.08)));
-    // incidence angle drives where the spectrum points and how wide it fans
     const inc = Math.atan2(E[1] - S[1], E[0] - S[0]);
-    const spread = 0.22 + Math.min(0.5, Math.abs(inc) * 0.55);
-    const centre = inc * 0.55 + 0.12;
+    const spread = (0.22 + Math.min(0.5, Math.abs(inc - P.a) * 0.55)) * (1 + charge * 0.7);
+    const centre = Math.max(-0.75, Math.min(0.75, inc * 0.55 + 0.12 + P.a * 1.1));
 
-    // incoming beam: grey, brighter toward the prism, with a glow
+    // incoming beam
+    const bw = 3 + charge * 4;
     const g = ctx.createLinearGradient(S[0], S[1], E[0], E[1]);
-    g.addColorStop(0, "rgba(107,116,128,0.05)"); g.addColorStop(1, "rgba(107,116,128,0.9)");
-    ctx.save(); ctx.shadowColor = "rgba(224,177,92,0.55)"; ctx.shadowBlur = 10;
-    ctx.strokeStyle = g; ctx.lineWidth = 3; ctx.lineCap = "round";
+    g.addColorStop(0, "rgba(107,116,128,0.05)"); g.addColorStop(1, `rgba(107,116,128,${0.85 + charge * 0.15})`);
+    ctx.save(); ctx.shadowColor = "rgba(224,177,92,0.6)"; ctx.shadowBlur = 10 + charge * 22;
+    ctx.strokeStyle = g; ctx.lineWidth = bw; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(S[0], S[1]); ctx.lineTo(E[0], E[1]); ctx.stroke(); ctx.restore();
-    // source glow
-    ctx.fillStyle = "rgba(224,177,92,0.9)"; ctx.beginPath(); ctx.arc(S[0], S[1], 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "rgba(224,177,92,0.95)";
+    ctx.beginPath(); ctx.arc(S[0], S[1], 4 + charge * 4, 0, Math.PI * 2); ctx.fill();
+    if (charge > 0.02) {
+      ctx.strokeStyle = `rgba(224,177,92,${0.35 * charge})`; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(S[0], S[1], 8 + charge * 14, 0, Math.PI * 2 * charge); ctx.stroke();
+    }
 
-    // rays out of the right face
-    const rays = FACTORS.map(([name, color], i) => {
-      const a = centre + spread * (i / (FACTORS.length - 1) - 0.5);
-      const len = (W - X[0]) / Math.max(0.2, Math.cos(a)) * 1.2;
-      const end = [X[0] + Math.cos(a) * len, X[1] + Math.sin(a) * len];
-      return { name, color, a, end };
+    // rays
+    const rays = COLORS.map((color, i) => {
+      const a = centre + spread * (i / (COLORS.length - 1) - 0.5);
+      const len = Math.max(W, H) * 1.4;
+      return { color, a, end: [X[0] + Math.cos(a) * len, X[1] + Math.sin(a) * len] };
     });
-    // soft spectrum fan behind the rays
-    ctx.save(); ctx.globalAlpha = 0.10; ctx.filter = "blur(10px)";
+    hoverRay = -1;
+    if (mouse && !drag) {
+      let best = 14;
+      rays.forEach((r, i) => { const d = distToSeg([mouse.x, mouse.y], X, r.end); if (d < best) { best = d; hoverRay = i; } });
+    }
+
+    ctx.save(); ctx.globalAlpha = 0.10 + charge * 0.12; ctx.filter = "blur(10px)";
     ctx.beginPath(); ctx.moveTo(X[0], X[1]);
     ctx.lineTo(rays[0].end[0], rays[0].end[1]); ctx.lineTo(rays[4].end[0], rays[4].end[1]); ctx.closePath();
-    const fg = ctx.createLinearGradient(0, rays[0].end[1], 0, rays[4].end[1]);
-    FACTORS.forEach(([, c], i) => fg.addColorStop(i / 4, c));
+    const fg = ctx.createLinearGradient(rays[0].end[0], rays[0].end[1], rays[4].end[0], rays[4].end[1]);
+    COLORS.forEach((c, i) => fg.addColorStop(i / 4, c));
     ctx.fillStyle = fg; ctx.fill(); ctx.restore();
 
-    rays.forEach(r => {
-      const rg = ctx.createLinearGradient(X[0], X[1], r.end[0], r.end[1]);
-      rg.addColorStop(0, r.color); rg.addColorStop(0.7, r.color + "88"); rg.addColorStop(1, r.color + "00");
-      ctx.save(); ctx.shadowColor = r.color; ctx.shadowBlur = 6;
-      ctx.strokeStyle = rg; ctx.lineWidth = 2.6; ctx.lineCap = "round";
+    rays.forEach((r, i) => {
+      const dim = hoverRay >= 0 && hoverRay !== i, hot = hoverRay === i;
+      const rg = ctx.createLinearGradient(X[0], X[1], X[0] + Math.cos(r.a) * W * 0.6, X[1] + Math.sin(r.a) * W * 0.6);
+      rg.addColorStop(0, r.color); rg.addColorStop(0.75, r.color + "88"); rg.addColorStop(1, r.color + "00");
+      ctx.save(); ctx.globalAlpha = dim ? 0.25 : 1;
+      ctx.shadowColor = r.color; ctx.shadowBlur = hot ? 18 : 6 + charge * 8;
+      ctx.strokeStyle = rg; ctx.lineWidth = hot ? 4.2 : 2.6 + charge * 1.2; ctx.lineCap = "round";
       ctx.beginPath(); ctx.moveTo(X[0], X[1]); ctx.lineTo(r.end[0], r.end[1]); ctx.stroke(); ctx.restore();
     });
 
-    // labels where each ray meets the right edge area
-    rays.forEach(r => {
-      const lx = W - 18;
-      const ly = X[1] + Math.tan(r.a) * (lx - X[0]);
-      if (ly > 10 && ly < H - 10) rayLabel(lx, ly - 10, r.name, r.color, 0.95);
-    });
-
-    // particles of light travelling along the rays
-    if (!reduce && Math.random() < 0.5) {
-      const r = rays[Math.floor(Math.random() * rays.length)];
-      particles.push({ r, p: 0, v: 0.004 + Math.random() * 0.006 });
+    // particles of light
+    if (!reduce) {
+      const rate = 0.5 + charge * 1.5 + (hoverRay >= 0 ? 0.6 : 0);
+      for (let n = 0; n < Math.floor(rate) + (Math.random() < rate % 1 ? 1 : 0); n++) {
+        const idx = hoverRay >= 0 && Math.random() < 0.7 ? hoverRay : Math.floor(Math.random() * rays.length);
+        particles.push({ r: rays[idx], p: 0, v: 0.003 + Math.random() * 0.004 + charge * 0.004 });
+      }
     }
-    particles = particles.filter(q => q.p < 0.75);
+    particles = particles.filter(q => q.p < 0.5).slice(-400);
     particles.forEach(q => {
       q.p += q.v; const pt = lerp(X, q.r.end, q.p);
-      ctx.globalAlpha = 1 - q.p / 0.75; ctx.fillStyle = q.r.color;
+      ctx.globalAlpha = 1 - q.p / 0.5; ctx.fillStyle = q.r.color;
       ctx.beginPath(); ctx.arc(pt[0], pt[1], 2.2, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
     });
 
-    // refracted path inside the glass
-    ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(E[0], E[1]); ctx.lineTo(X[0], X[1]); ctx.stroke();
-
-    // the prism: frosted glass with a highlight
+    // the prism
     ctx.save();
     ctx.shadowColor = "rgba(31,78,121,0.22)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
     const pg = ctx.createLinearGradient(P.C[0], P.A[1], P.B[0], P.B[1]);
     pg.addColorStop(0, "rgba(220,232,243,0.92)"); pg.addColorStop(0.6, "rgba(159,187,214,0.82)");
     pg.addColorStop(1, "rgba(94,135,174,0.85)");
-    ctx.fillStyle = pg; ctx.strokeStyle = "#1F4E79"; ctx.lineWidth = 2.2; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(...P.A); ctx.lineTo(...P.B); ctx.lineTo(...P.C); ctx.closePath();
-    ctx.fill(); ctx.restore();
-    ctx.strokeStyle = "#1F4E79"; ctx.lineWidth = 2.2; ctx.lineJoin = "round";
+    ctx.fillStyle = pg; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(...P.A); ctx.lineTo(...P.B); ctx.lineTo(...P.C); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = drag ? "#C08A2E" : "#1F4E79"; ctx.lineWidth = drag ? 2.8 : 2.2; ctx.lineJoin = "round";
     ctx.beginPath(); ctx.moveTo(...P.A); ctx.lineTo(...P.B); ctx.lineTo(...P.C); ctx.closePath(); ctx.stroke();
+    const h1 = lerp(P.A, P.C, 0.14), h2 = lerp(P.A, P.C, 0.84), inward = lerp(P.A, P.B, 0.06);
+    const off = [inward[0] - P.A[0], inward[1] - P.A[1]];
     ctx.strokeStyle = "rgba(255,255,255,0.65)"; ctx.lineWidth = 1.6;
-    const h1 = lerp(P.A, P.C, 0.12), h2 = lerp(P.A, P.C, 0.85);
-    ctx.beginPath(); ctx.moveTo(h1[0] + 6, h1[1] + 4); ctx.lineTo(h2[0] + 10, h2[1] - 4); ctx.stroke();
-    // inside refraction drawn on top so it reads through the glass
-    ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(h1[0] + off[0], h1[1] + off[1]); ctx.lineTo(h2[0] + off[0], h2[1] + off[1]); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,255,255,0.88)"; ctx.lineWidth = 1.8 + charge;
     ctx.beginPath(); ctx.moveTo(E[0], E[1]); ctx.lineTo(X[0], X[1]); ctx.stroke();
 
-    // exit flash and click pulses
-    ctx.fillStyle = "rgba(224,177,92,0.85)"; ctx.beginPath(); ctx.arc(X[0], X[1], 3.4, 0, Math.PI * 2); ctx.fill();
-    pulses = pulses.filter(p => now - p.born < 1100);
+    ctx.fillStyle = "rgba(224,177,92,0.9)";
+    ctx.beginPath(); ctx.arc(X[0], X[1], 3.4 + charge * 3, 0, Math.PI * 2); ctx.fill();
+
+    // pulses from releasing a charge
+    pulses = pulses.filter(p => now - p.born < 1200);
     pulses.forEach(p => {
-      const k = (now - p.born) / 1100;
-      ctx.strokeStyle = `rgba(224,177,92,${0.6 * (1 - k)})`; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(X[0], X[1], 8 + k * P.s * 0.9, 0, Math.PI * 2); ctx.stroke();
-      if (k < 0.3) rays.forEach(r => particles.push({ r, p: k * 0.1, v: 0.012 + Math.random() * 0.01 }));
+      const k = (now - p.born) / 1200;
+      ctx.strokeStyle = `rgba(224,177,92,${0.65 * (1 - k)})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(X[0], X[1], 8 + k * P.s * (0.6 + p.k), 0, Math.PI * 2); ctx.stroke();
+      if (k < 0.25) rays.forEach(r => { for (let j = 0; j < Math.ceil(p.k * 2); j++)
+        particles.push({ r, p: k * 0.05, v: 0.01 + Math.random() * 0.012 }); });
     });
 
     if (!reduce) requestAnimationFrame(frame);
