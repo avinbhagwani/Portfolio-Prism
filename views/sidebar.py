@@ -10,6 +10,8 @@ the session (the intro does not replay).
 
 import streamlit as st
 
+from core.substack import SUBSTACK_URL, tracked
+
 
 SECTIONS = [
     ("Analyse", [
@@ -111,7 +113,7 @@ def render(pages, active_path):
         st.markdown(
             "<div class='ps-foot'>"
             "Questions, bugs or ideas?<br>"
-            "<a href='https://avinb.substack.com/subscribe' target='_blank'>Substack</a>"
+            f"<a href='{tracked(SUBSTACK_URL, 'sidebar')}' target='_blank'>Substack</a>"
             " &nbsp;\u00b7&nbsp; "
             "<a href='https://www.linkedin.com/in/avinbhagwani69/' target='_blank'>LinkedIn</a>"
             " &nbsp;\u00b7&nbsp; <a href='mailto:avinbhagwani69@gmail.com'>Email</a>"

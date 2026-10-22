@@ -2,8 +2,9 @@
 Writing: Avin's Substack inside PRISM.
 
 List view   featured latest article, the rest as a card grid, subscribe.
-Reader view ?post=<slug>: the full article with images, a link to read
-            and comment on Substack, a subscribe box, a "try it in
+Reader view ?post=<slug>: the opening third of the article with images,
+            then "Continue reading on Substack" (so every read counts in
+            Substack's stats; links carry utm_source=prism), a subscribe box, a "try it in
             PRISM" prompt when the article relates to one of the tools,
             and more articles.
 
@@ -56,6 +57,13 @@ CSS = """
   padding:16px 20px; background:#FFFBF4; margin:1.6rem 0 0.6rem 0;}
 .pw-cta b {display:block; color:#1B2533; font-size:1rem; margin-bottom:2px;}
 .pw-cta span {color:#6B7480; font-size:0.9rem;}
+.pw-continue {border:1px solid #E6E9ED; border-radius:14px; padding:22px 24px 6px 24px;
+  margin:0.4rem 0 0.8rem 0; max-width:46rem;
+  background:linear-gradient(180deg, #FFFFFF 0%, #F7F9FB 100%);}
+.pw-continue-meta {font-size:0.78rem; color:#9A6B1E; font-weight:600; letter-spacing:0.04em;
+  text-transform:uppercase; margin-bottom:4px;}
+.pw-continue-title {font-size:1.35rem; font-weight:600; color:#1B2533; margin-bottom:4px;}
+.pw-continue-sub {font-size:0.95rem; color:#6B7480; margin-bottom:12px;}
 .pw-empty {border:1px dashed #D5DAE0; border-radius:12px; padding:28px; text-align:center;
   color:#6B7480;}
 </style>
@@ -66,6 +74,10 @@ ARTICLE_CSS = """
 .pw-article {max-width: 46rem; font-family: Inter, sans-serif; color: #1B2533;
   font-size: 1.08rem; line-height: 1.75;}
 .pw-article p {margin: 0 0 1.15em 0;}
+.pw-article.pw-fade {position: relative; max-height: none;}
+.pw-article.pw-fade::after {content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 140px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, #FFFFFF 92%);}
 .pw-article img.pw-cover {margin: 0 0 1.6em 0; width: 100%;}
 .pw-article h1, .pw-article h2, .pw-article h3, .pw-article h4 {
   font-weight: 650; line-height: 1.3; margin: 1.8em 0 0.6em 0; color: #1B2533;}
@@ -129,15 +141,15 @@ def _list(posts, error):
         unsafe_allow_html=True,
     )
     c1, c2, _ = st.columns([1.3, 1.3, 4])
-    c1.link_button("Subscribe free", sb.SUBSCRIBE_URL, type="primary",
+    c1.link_button("Subscribe free", sb.tracked(sb.SUBSCRIBE_URL, "list-subscribe"), type="primary",
                    icon=":material/mail:", width="stretch")
-    c2.link_button("Open Substack", sb.SUBSTACK_URL, icon=":material/open_in_new:",
+    c2.link_button("Open Substack", sb.tracked(sb.SUBSTACK_URL, "list-open"), icon=":material/open_in_new:",
                    width="stretch")
 
     if not posts:
         st.markdown(
             "<div class='pw-empty'>Articles couldn't be loaded just now. "
-            f"You can read them on <a href='{sb.SUBSTACK_URL}' target='_blank'>"
+            f"You can read them on <a href='{sb.tracked(sb.SUBSTACK_URL, 'empty')}' target='_blank'>"
             f"{sb.PUBLICATION}</a>.</div>",
             unsafe_allow_html=True,
         )
@@ -196,11 +208,6 @@ def _reader(post, posts):
         f"<div class='pw-byline'><b>Avin Bhagwani</b> · {_meta(post)}</div>",
         unsafe_allow_html=True,
     )
-    c1, c2, _ = st.columns([1.5, 1.3, 4])
-    c1.link_button("Read on Substack", post.url, icon=":material/open_in_new:",
-                   width="stretch")
-    c2.link_button("Subscribe", sb.SUBSCRIBE_URL, type="primary",
-                   icon=":material/mail:", width="stretch")
 
     body = post.body_html
     if not body:
@@ -216,10 +223,15 @@ def _reader(post, posts):
         cover_id = post.cover.rsplit("/", 1)[-1][:40] if post.cover else ""
         cover = (f"<img class='pw-cover' src='{post.cover}' alt=''>"
                  if post.cover and cover_id not in body else "")
-        st.html(ARTICLE_CSS + f"<article class='pw-article'>{cover}{body}</article>")
+        # Preview only: the full article is read on Substack, so every read
+        # counts in Substack's stats and readers can like, comment and subscribe
+        excerpt, remaining = sb.preview(body)
+        fade = " pw-fade" if remaining else ""
+        st.html(ARTICLE_CSS
+                + f"<article class='pw-article{fade}'>{cover}{excerpt}</article>")
+    _continue_card(post, remaining if body else post.words)
 
     _related_tool(post)
-    _subscribe_box("Enjoyed this? Get the next one by email")
 
     others = [p for p in posts if p.slug != post.slug][:3]
     if others:
@@ -236,6 +248,25 @@ def _reader(post, posts):
                 )
                 st.button("Read", key=f"more_{p.slug}", icon=":material/arrow_forward:",
                           icon_position="right", on_click=_open, args=(p.slug,))
+
+
+def _continue_card(post, remaining_words):
+    minutes = max(1, round(remaining_words / 230)) if remaining_words else 0
+    left = f"{minutes} more min" if minutes else "Full article"
+    st.markdown(
+        "<div class='pw-continue'>"
+        f"<div class='pw-continue-meta'>{left} · on Substack</div>"
+        "<div class='pw-continue-title'>Continue reading on Substack</div>"
+        "<div class='pw-continue-sub'>Read the rest, then like, comment or "
+        "subscribe to get the next one by email.</div></div>",
+        unsafe_allow_html=True,
+    )
+    c1, c2, _ = st.columns([1.7, 1.2, 3])
+    c1.link_button("Continue reading", sb.tracked(post.url, "continue"),
+                   type="primary", icon=":material/arrow_outward:",
+                   width="stretch")
+    c2.link_button("Subscribe", sb.tracked(sb.SUBSCRIBE_URL, "reader-subscribe"),
+                   icon=":material/mail:", width="stretch")
 
 
 def _related_tool(post):
