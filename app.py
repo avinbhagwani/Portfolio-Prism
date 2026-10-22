@@ -12,7 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 from views import (factor_analysis, factor_indexes, drawdown_analysis, coming_soon,
-                   home, intro, sidebar, writing)
+                   games, home, intro, sidebar, writing)
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -49,6 +49,8 @@ PAGES = [
             icon=":material/query_stats:", url_path="fbi-intelligence"),
     st.Page(drawdown_analysis.render, title="Drawdown Analysis",
             icon=":material/trending_down:", url_path="drawdown-analysis"),
+    st.Page(games.render_try_to_time, title="Try to Time",
+            icon=":material/sports_esports:", url_path="try-to-time"),
     st.Page(writing.render, title="Writing",
             icon=":material/edit_note:", url_path="writing"),
     st.Page(_efficient_frontier, title="Efficient Frontier",

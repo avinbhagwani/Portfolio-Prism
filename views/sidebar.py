@@ -25,6 +25,10 @@ SECTIONS = [
         ("drawdown-analysis", "Drawdown Analysis", ":material/trending_down:",
          "Falls and recoveries"),
     ]),
+    ("Games", [
+        ("try-to-time", "Try to Time", ":material/sports_esports:",
+         "Pick next year's winner"),
+    ]),
     ("Read", [
         ("writing", "Writing", ":material/edit_note:",
          "My Substack"),
