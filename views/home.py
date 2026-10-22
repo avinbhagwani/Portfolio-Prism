@@ -50,7 +50,9 @@ SOON = [
 CSS = """
 <style>
 .ph-eyebrow {font-size:0.8rem; letter-spacing:0.18em; text-transform:uppercase;
-  color:#1F4E79; font-weight:600; margin:0 0 0.5rem 0;}
+  color:#1F4E79; font-weight:600; margin:0 0 0.15rem 0;}
+.ph-by {font-size:0.88rem; color:#8A939E; margin:0 0 0.9rem 0;}
+.ph-by b {color:#5B6572; font-weight:500;}
 .ph-title {font-size:3.1rem; font-weight:700; color:#1B2533; line-height:1.06;
   letter-spacing:-0.028em; margin:0 0 1rem 0;}
 .ph-title span {background: linear-gradient(90deg, #1F4E79, #2F8F9D 30%, #C08A2E 55%, #5E9A62 75%, #8E5B9F);
@@ -109,6 +111,7 @@ def render():
     with left:
         st.markdown(
             "<div class='ph-eyebrow'>PRISM</div>"
+            "<div class='ph-by'>by <b>Avin Bhagwani</b></div>"
             "<div class='ph-title'>Every return has a <span>spectrum</span>.</div>"
             "<div class='ph-sub'>PRISM looks through Indian funds, indices and "
             "portfolios to show what really drives them.</div>",
