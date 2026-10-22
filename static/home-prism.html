@@ -16,29 +16,44 @@
     box-shadow: 0 2px 4px rgba(10,20,40,0.10), 0 24px 48px rgba(10,20,40,0.22);
     transform-origin: 50% 50%; will-change: transform;
   }
-  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+  .hint {
+    position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; pointer-events: none;
+    font: 500 11.5px/1 Inter, system-ui, sans-serif; letter-spacing: 0.06em; color: rgba(220,232,255,0.55);
+    transition: opacity 0.8s ease; opacity: 0; animation: hint-in 1s ease 1.2s forwards;
+  }
+  .hint i { font-style: normal; color: rgba(255,226,170,0.85); }
+  .hint.gone { opacity: 0 !important; animation: none; }
+  @keyframes hint-in { to { opacity: 1; } }
 </style>
 </head>
 <body>
-<div class="panel" id="panel"><canvas id="c"></canvas></div>
+<div class="panel" id="panel"><canvas id="c"></canvas>
+  <div class="hint" id="hint"><i>Move</i> to steer the starlight &nbsp;·&nbsp; <i>hold</i> to charge &nbsp;·&nbsp; <i>drag</i> the crystal</div>
+</div>
 <script>
 /*
-  Space scene. A 3D glass crystal floats and slowly turns among stars; a
-  bright star you steer with the cursor sends a stream of starlight into
-  it, which leaves as soft swirling nebula clouds in PRISM's palette.
-    move         steer the star; star layers shift with depth; panel tilts
-    hover prism  the prism glows
-    click        a starburst from the prism
+  Space scene. A 3D glass crystal floats among stars; a bright star you
+  steer with the cursor sends a stream of starlight into it, which leaves
+  as soft swirling nebula clouds in PRISM's palette.
+    move           steer the star (it leaves a comet trail); nearby stars
+                   join into a constellation; stardust orbits the cursor
+    drag crystal   spin it in 3D and tilt it; it coasts, then settles back,
+                   and the nebula swings with it
+    hold           gather light: the star swells, the beam brightens
+    release        a supernova through the nebula, bigger the longer you held
   Idle or touch: the star drifts on its own. Shooting stars now and then.
 */
 (() => {
   const PLUMES = ["#5B8FD6", "#3FB3BF", "#E2B062", "#79C08A", "#B48AD9"];
   const cv = document.getElementById("c"), ctx = cv.getContext("2d");
-  const panel = document.getElementById("panel");
+  const panel = document.getElementById("panel"), hint = document.getElementById("hint");
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let W = 0, H = 0, target = null, lastMove = -1e9, t0 = performance.now();
-  let src = null, stars = [], dust = [], bursts = [], meteors = [], nextMeteor = 3000;
-  let glow = 0, tiltX = 0, tiltY = 0, par = [0, 0];
+  let W = 0, H = 0, target = null, lastMove = -1e9, t0 = performance.now(), last = t0;
+  let src = null, stars = [], dust = [], bursts = [], meteors = [], trail = [], nextMeteor = 3000;
+  let glow = 0, tiltX = 0, tiltY = 0, par = [0, 0], flow = 0;
+  let drag = null, yaw = 0, yawV = 0, tilt = 0, tiltV = 0;       // crystal spin
+  let hold = null, charge = 0, flare = 0, used = false;          // light charge
 
   function resize() {
     const r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -46,36 +61,74 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     stars = Array.from({ length: Math.round(W * H / 1500) }, () => ({
       x: Math.random() * W, y: Math.random() * H, z: 0.2 + Math.random() * 0.8,
-      ph: Math.random() * Math.PI * 2, sp: 0.6 + Math.random() * 1.6,
+      ph: Math.random() * Math.PI * 2, sp: 0.6 + Math.random() * 1.6, sx: 0, sy: 0,
     }));
   }
   window.addEventListener("resize", resize); resize();
 
-  const local = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-  window.addEventListener("pointermove", e => { target = local(e); lastMove = performance.now(); });
-  window.addEventListener("pointerleave", () => { target = null; });
-  window.addEventListener("pointerdown", () => bursts.push({ born: performance.now() }));
-
   const lerp = (a, b, t) => a + (b - a) * t;
   const mix = (p, q, t) => [lerp(p[0], q[0], t), lerp(p[1], q[1], t)];
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rot = (p, c, a) => { const dx = p[0] - c[0], dy = p[1] - c[1], cs = Math.cos(a), sn = Math.sin(a);
                              return [c[0] + dx * cs - dy * sn, c[1] + dx * sn + dy * cs]; };
+  const local = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const firstUse = () => { if (!used) { used = true; setTimeout(() => hint.classList.add("gone"), 600); } };
 
+  // ---- input -------------------------------------------------------
+  cv.addEventListener("pointerdown", e => {
+    target = local(e); lastMove = performance.now();
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+    if (inTri(target, prism(performance.now()))) {
+      drag = { x: target[0], y: target[1], yaw0: yaw, tilt0: tilt, px: target[0], py: target[1] };
+      yawV = tiltV = 0;
+    } else {
+      hold = performance.now();
+    }
+  });
+  window.addEventListener("pointermove", e => {
+    target = local(e); lastMove = performance.now();
+    if (drag) {
+      const dx = target[0] - drag.x, dy = target[1] - drag.y;
+      yaw = drag.yaw0 + dx / 90;
+      tilt = clamp(drag.tilt0 + dy / 260, -0.42, 0.42);
+      yawV = (target[0] - drag.px) / 90; tiltV = (target[1] - drag.py) / 260;
+      drag.px = target[0]; drag.py = target[1];
+      if (Math.hypot(dx, dy) > 8) firstUse();
+    }
+  });
+  function release() {
+    if (drag) drag = null;
+    if (hold !== null) {
+      const c = charge;
+      bursts.push({ born: performance.now(), power: c });
+      flare = Math.max(flare, 0.25 + c * 1.1);
+      if (c > 0.25) firstUse();
+      hold = null;
+    }
+  }
+  window.addEventListener("pointerup", release);
+  window.addEventListener("pointercancel", release);
+  window.addEventListener("blur", release);
+  window.addEventListener("pointerleave", () => { target = null; release(); });
+
+  // ---- geometry ----------------------------------------------------
   function prism(now) {
     const k = (now - t0) / 1000;
     const s = Math.min(H * 0.42, W * 0.27), h = s * Math.sqrt(3) / 2;
     const c = [W * 0.44, H * 0.55 + Math.sin(k * 0.9) * 4];      // gentle float
-    const a = Math.sin(k * 0.55) * 0.05;                        // and sway
-    const turn = Math.sin(k * 0.35);                            // slow turn shows depth
-    const d = [s * (0.20 + 0.06 * turn), -s * (0.14 - 0.03 * turn)];
+    const a = Math.sin(k * 0.55) * 0.05 + tilt;                 // sway plus your tilt
+    const phi = 1.25 * Math.tanh(0.6 + Math.sin(k * 0.35) * 0.25 + yaw);   // 3D turn
+    const d = [s * 0.30 * Math.sin(phi), -s * (0.10 + 0.06 * Math.cos(phi))];
     const A = rot([c[0], c[1] - h * 0.62], c, a), B = rot([c[0] + s / 2, c[1] + h * 0.38], c, a),
           C = rot([c[0] - s / 2, c[1] + h * 0.38], c, a);
     const back = p => [p[0] + d[0], p[1] + d[1]];
-    return { s, c, A, B, C, A2: back(A), B2: back(B), C2: back(C) };
+    return { s, c, a, A, B, C, A2: back(A), B2: back(B), C2: back(C) };
   }
   function inTri(p, P) {
+    const grow = q => mix(P.c, q, 1.15);                          // forgiving hit area
+    const A = grow(P.A), B = grow(P.B), C = grow(P.C);
     const sg = (a, b, c) => (a[0] - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (a[1] - c[1]);
-    const d1 = sg(p, P.A, P.B), d2 = sg(p, P.B, P.C), d3 = sg(p, P.C, P.A);
+    const d1 = sg(p, A, B), d2 = sg(p, B, C), d3 = sg(p, C, A);
     return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
   }
   function sparkle(x, y, r, a, col) {        // four-point star flare
@@ -85,29 +138,61 @@
     ctx.beginPath(); ctx.moveTo(x - r * 3, y); ctx.lineTo(x + r * 3, y);
     ctx.moveTo(x, y - r * 3); ctx.lineTo(x, y + r * 3); ctx.stroke(); ctx.restore();
   }
+  const hexA = a => Math.round(clamp(a, 0, 1) * 255).toString(16).padStart(2, "0");
 
+  // ---- frame -------------------------------------------------------
   function frame(now) {
-    const k = (now - t0) / 1000, P = prism(now);
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const k = (now - t0) / 1000;
     const idle = !target || now - lastMove > 3000;
 
-    // eased interaction state
+    // crystal coasts after a drag, then settles back
+    if (!drag) {
+      yaw += yawV; yawV *= 0.94; yaw *= 0.988;
+      tilt = clamp(tilt + tiltV, -0.42, 0.42); tiltV *= 0.9; tilt *= 0.965;
+    }
+    const P = prism(now);
+
+    // charge builds while held; flare fades after release
+    charge = hold !== null ? 1 - Math.exp(-(now - hold) / 900) : lerp(charge, 0, 0.2);
+    flare *= Math.exp(-dt / 1.1);
+
     const pgoal = idle ? [0, 0] : [target[0] / W - 0.5, target[1] / H - 0.5];
     par = mix(par, pgoal, 0.05);
     tiltX = lerp(tiltX, -par[1] * 6, 0.08); tiltY = lerp(tiltY, par[0] * 8, 0.08);
     panel.style.transform = `rotateX(${tiltX.toFixed(2)}deg) rotateY(${tiltY.toFixed(2)}deg)`;
     const over = target && !idle && inTri(target, P);
-    glow = lerp(glow, over ? 1 : 0, 0.1);
-    cv.style.cursor = over ? "pointer" : "default";
+    glow = lerp(glow, drag ? 1.3 : over ? 1 : 0, 0.1);
+    cv.style.cursor = drag ? "grabbing" : over ? "grab" : "default";
 
     ctx.clearRect(0, 0, W, H);
 
-    // stars: slow drift, parallax with the cursor by depth, twinkle
+    // stars: slow drift, parallax by depth, twinkle
+    const near = [];
     stars.forEach(s => {
       s.x -= 0.04 * s.z; if (s.x < -4) s.x = W + 4;
-      const x = s.x - par[0] * 26 * s.z, y = s.y - par[1] * 18 * s.z;
+      s.sx = s.x - par[0] * 26 * s.z; s.sy = s.y - par[1] * 18 * s.z;
+      let boost = 0;
+      if (target && !idle) {
+        const dd = Math.hypot(s.sx - target[0], s.sy - target[1]);
+        if (dd < 120) { boost = 1 - dd / 120; if (s.z > 0.35) near.push([s, dd]); }
+      }
       const tw = 0.55 + 0.45 * Math.sin(k * s.sp + s.ph);
-      ctx.globalAlpha = (0.25 + 0.75 * s.z) * tw; ctx.fillStyle = "#DCE8FF";
-      ctx.beginPath(); ctx.arc(x, y, 0.4 + s.z * 1.1, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = Math.min(1, (0.25 + 0.75 * s.z) * tw + boost * 0.5); ctx.fillStyle = "#DCE8FF";
+      ctx.beginPath(); ctx.arc(s.sx, s.sy, 0.4 + s.z * 1.1 + boost * 0.6, 0, Math.PI * 2); ctx.fill();
+    });
+    // constellation: link the stars around the cursor to their nearest neighbours
+    near.sort((a, b) => a[1] - b[1]);
+    const pts = near.slice(0, 9);
+    ctx.lineWidth = 0.7;
+    pts.forEach(([s, dd], i) => {
+      let best = null, bd = 1e9;
+      pts.forEach(([o], j) => { if (j !== i) { const q = Math.hypot(o.sx - s.sx, o.sy - s.sy); if (q < bd) { bd = q; best = o; } } });
+      if (best && bd < 90) {
+        ctx.globalAlpha = 0.35 * (1 - dd / 120);
+        ctx.strokeStyle = "#BFD3FF";
+        ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(best.sx, best.sy); ctx.stroke();
+      }
     });
     ctx.globalAlpha = 1;
 
@@ -129,51 +214,73 @@
     const goal = idle
       ? [W * 0.10, P.c[1] + Math.sin(k * 0.45) * H * 0.18]
       : [Math.min(Math.max(target[0], W * 0.04), P.C[0] - 40), Math.min(Math.max(target[1], H * 0.08), H * 0.92)];
-    src = src ? mix(src, goal, 0.12) : goal;
+    src = src ? mix(src, goal, drag ? 0.04 : 0.12) : goal;
+    trail.push([src[0], src[1]]); if (trail.length > 22) trail.shift();
     const t = Math.max(0.3, Math.min(0.8, 0.55 + (src[1] - P.c[1]) / (P.s * 1.8)));
     const E = mix(P.A, P.C, t), X = mix(P.A, P.B, Math.min(0.85, t + 0.06));
     const inc = Math.atan2(E[1] - src[1], E[0] - src[0]);
-    const centre = 0.08 + inc * 0.6, spread = 0.34 + Math.min(0.3, Math.abs(inc) * 0.45);
+    const centre = 0.08 + inc * 0.6 + P.a * 1.3;                 // nebula swings with the crystal
+    const spread = (0.34 + Math.min(0.3, Math.abs(inc) * 0.45)) * (1 + flare * 0.35);
+    const energy = 1 + charge * 0.6 + flare;
 
     ctx.save(); ctx.globalCompositeOperation = "lighter";
+
+    // comet trail behind the star
+    for (let j = 1; j < trail.length; j++) {
+      const q = j / trail.length;
+      ctx.strokeStyle = `rgba(255,226,170,${0.35 * q * q})`; ctx.lineWidth = 0.6 + q * 2.2;
+      ctx.beginPath(); ctx.moveTo(...trail[j - 1]); ctx.lineTo(...trail[j]); ctx.stroke();
+    }
+
     const bg = ctx.createLinearGradient(src[0], src[1], E[0], E[1]);
-    bg.addColorStop(0, "rgba(255,236,200,0.05)"); bg.addColorStop(1, "rgba(255,236,200,0.55)");
-    ctx.strokeStyle = bg; ctx.lineWidth = 8; ctx.filter = "blur(6px)";
+    bg.addColorStop(0, "rgba(255,236,200,0.05)"); bg.addColorStop(1, `rgba(255,236,200,${0.5 + charge * 0.4})`);
+    ctx.strokeStyle = bg; ctx.lineWidth = 8 + charge * 12; ctx.filter = "blur(6px)";
     ctx.beginPath(); ctx.moveTo(...src); ctx.lineTo(...E); ctx.stroke();
     ctx.filter = "none";
-    // a stream of starlight motes flowing into the crystal
-    const n = 26, len = Math.hypot(E[0] - src[0], E[1] - src[1]);
+    // a stream of starlight motes flowing into the crystal, faster when charged
+    flow += dt * (0.55 + charge * 1.6);
+    const n = 26 + Math.round(charge * 20), len = Math.hypot(E[0] - src[0], E[1] - src[1]) || 1;
+    const nx = -(E[1] - src[1]) / len, ny = (E[0] - src[0]) / len;
     for (let j = 0; j < n; j++) {
-      const q = ((k * 0.55 + j / n) % 1), pt = mix(src, E, q);
-      const wob = Math.sin(j * 12.9 + k * 3) * 1.6;
-      const nx = -(E[1] - src[1]) / len, ny = (E[0] - src[0]) / len;
+      const q = ((flow + j / n) % 1), pt = mix(src, E, q);
+      const wob = Math.sin(j * 91.7 + k * 4) * (1.2 + charge * 1.6);   // scattered, not a wave
       ctx.globalAlpha = 0.25 + 0.6 * q; ctx.fillStyle = "#FFEFD2";
       ctx.beginPath(); ctx.arc(pt[0] + nx * wob, pt[1] + ny * wob, 0.8 + q * 1.1, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
 
     // nebula plumes: soft clouds of colour, not hard stripes
-    const L = W * 0.52;
+    const L = W * 0.52 * (1 + flare * 0.18);
     PLUMES.forEach((col, i) => {
       const a = centre + spread * (i / 4 - 0.5), w = spread / 5;
       const p1 = [X[0] + Math.cos(a - w) * L, X[1] + Math.sin(a - w) * L];
       const p2 = [X[0] + Math.cos(a + w) * L, X[1] + Math.sin(a + w) * L];
       const mid = [X[0] + Math.cos(a) * L * 0.5, X[1] + Math.sin(a) * L * 0.5];
       const rg = ctx.createRadialGradient(mid[0], mid[1], 0, mid[0], mid[1], L * 0.6);
-      rg.addColorStop(0, col + "99"); rg.addColorStop(1, col + "00");
+      rg.addColorStop(0, col + hexA(0.6 * energy)); rg.addColorStop(1, col + "00");
       ctx.fillStyle = rg; ctx.filter = "blur(20px)";
       ctx.beginPath(); ctx.moveTo(...X); ctx.lineTo(...p1); ctx.lineTo(...p2); ctx.closePath(); ctx.fill();
       ctx.filter = "none";
-      // stardust
-      if (!reduce && Math.random() < 0.22)
+      if (!reduce && Math.random() < 0.22 * energy)
         dust.push({ x: X[0], y: X[1], a: a + (Math.random() - 0.5) * w * 2,
-                    v: 0.5 + Math.random() * 0.9, life: 0, col });
+                    v: (0.5 + Math.random() * 0.9) * (1 + flare * 0.6), life: 0, col });
     });
-    dust = dust.filter(d => d.life < 1).slice(-500);
+
+    // stardust: drifts out, swirls, and orbits the cursor when it's near
+    dust = dust.filter(d => d.life < 1).slice(-700);
     dust.forEach(d => {
-      d.life += 0.006; d.a += Math.sin(d.life * 9 + d.v * 7) * 0.006;   // gentle swirl
+      d.life += 0.006; d.a += Math.sin(d.life * 9 + d.v * 7) * 0.006;
       d.x += Math.cos(d.a) * d.v; d.y += Math.sin(d.a) * d.v;
-      ctx.globalAlpha = Math.sin(Math.PI * d.life) * 0.9; ctx.fillStyle = d.col;
+      if (target && !idle && !drag) {
+        const dx = target[0] - d.x, dy = target[1] - d.y, dd = Math.hypot(dx, dy);
+        if (dd < 110 && dd > 4) {
+          const f = 1 - dd / 110;
+          d.x += (dx / dd) * 0.5 * f - (dy / dd) * 1.4 * f;
+          d.y += (dy / dd) * 0.5 * f + (dx / dd) * 1.4 * f;
+          d.life -= 0.003 * f;                                  // linger while orbiting
+        }
+      }
+      ctx.globalAlpha = Math.sin(Math.PI * clamp(d.life, 0, 1)) * 0.9; ctx.fillStyle = d.col;
       ctx.beginPath(); ctx.arc(d.x, d.y, 1.1, 0, Math.PI * 2); ctx.fill();
     });
     ctx.globalAlpha = 1; ctx.restore();
@@ -184,41 +291,59 @@
       if (fill) { ctx.fillStyle = fill; ctx.fill(); }
       if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
     };
+    const lit = Math.min(1.6, glow + charge * 0.8 + flare * 0.6);
     ctx.lineJoin = "round";
     ctx.save();
-    ctx.shadowColor = `rgba(110,160,230,${0.30 + glow * 0.35})`; ctx.shadowBlur = 34 + glow * 26;
-    poly([P.A, P.B, P.B2, P.A2], "rgba(150,190,240,0.10)");                 // right face (glow source)
+    ctx.shadowColor = `rgba(130,175,240,${0.30 + lit * 0.3})`; ctx.shadowBlur = 34 + lit * 26;
+    poly([P.A, P.B, P.B2, P.A2], "rgba(150,190,240,0.10)");
     ctx.restore();
     poly([P.A2, P.B2, P.C2], "rgba(120,160,215,0.06)", "rgba(170,200,240,0.22)", 1);   // back face
     const top = ctx.createLinearGradient(P.A[0], P.A[1], P.B2[0], P.B2[1]);
-    top.addColorStop(0, `rgba(200,225,255,${0.22 + glow * 0.1})`); top.addColorStop(1, "rgba(120,160,215,0.08)");
-    poly([P.A, P.B, P.B2, P.A2], top, "rgba(190,215,250,0.45)", 1);          // right/top face
-    poly([P.A, P.C, P.C2, P.A2], "rgba(140,180,230,0.07)", "rgba(170,200,240,0.25)", 1); // left face
+    top.addColorStop(0, `rgba(200,225,255,${0.22 + lit * 0.1})`); top.addColorStop(1, "rgba(120,160,215,0.08)");
+    poly([P.A, P.B, P.B2, P.A2], top, "rgba(190,215,250,0.45)", 1);
+    poly([P.A, P.C, P.C2, P.A2], "rgba(140,180,230,0.07)", "rgba(170,200,240,0.25)", 1);
     const fr = ctx.createLinearGradient(P.C[0], P.A[1], P.B[0], P.B[1]);
-    fr.addColorStop(0, `rgba(185,215,250,${0.26 + glow * 0.08})`);
+    fr.addColorStop(0, `rgba(185,215,250,${0.26 + lit * 0.08})`);
     fr.addColorStop(0.6, "rgba(100,140,200,0.14)"); fr.addColorStop(1, "rgba(50,80,130,0.20)");
     const rim = ctx.createLinearGradient(P.C[0], P.A[1], P.B[0], P.B[1]);
     rim.addColorStop(0, "rgba(230,242,255,0.95)"); rim.addColorStop(1, "rgba(150,185,230,0.6)");
-    poly([P.A, P.B, P.C], fr, rim, 1.4 + glow * 0.6);                       // front face
+    poly([P.A, P.B, P.C], fr, rim, 1.4 + lit * 0.6);
+    // a highlight that slides across the glass as it turns
+    const sl = 0.5 + 0.35 * Math.sin(yaw * 1.4 + k * 0.35);
     const h1 = mix(P.A, P.C, 0.18), h2 = mix(P.A, P.C, 0.78);
+    const off = (sl - 0.5) * P.s * 0.5;
     ctx.strokeStyle = "rgba(255,255,255,0.5)"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(h1[0] + 7, h1[1] + 3); ctx.lineTo(h2[0] + 9, h2[1] - 3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(h1[0] + 7 + off, h1[1] + 3); ctx.lineTo(h2[0] + 9 + off * 0.6, h2[1] - 3); ctx.stroke();
     ctx.strokeStyle = "rgba(255,240,220,0.55)"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(...E); ctx.lineTo(...X); ctx.stroke();
 
-    // stars at the source and exit
-    sparkle(src[0], src[1], 3.2, 1, "#FFE9C2");
-    sparkle(X[0], X[1], 2.2, 0.85 + 0.15 * Math.sin(k * 3), "#FFF4E0");
+    // the star you steer; light gathers into it while you hold
+    if (charge > 0.02) {
+      ctx.strokeStyle = `rgba(255,226,170,${0.6 * charge})`; ctx.lineWidth = 1;
+      const rr = 8 + (1 - ((k * 1.6) % 1)) * 26 * (1 - charge * 0.5);
+      ctx.beginPath(); ctx.arc(src[0], src[1], rr, 0, Math.PI * 2); ctx.stroke();
+    }
+    sparkle(src[0], src[1], 3.2 * (1 + charge * 1.3), 1, "#FFE9C2");
+    sparkle(X[0], X[1], 2.2 * (1 + flare * 0.8), 0.85 + 0.15 * Math.sin(k * 3), "#FFF4E0");
 
-    // starburst on click
-    bursts = bursts.filter(b => now - b.born < 1500);
+    // supernova on release: rings through the nebula, dust burst
+    bursts = bursts.filter(b => now - b.born < 1800);
     bursts.forEach(b => {
-      const q = (now - b.born) / 1500, e = 1 - Math.pow(1 - q, 3);
-      ctx.strokeStyle = `rgba(255,232,190,${0.5 * (1 - q)})`; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(P.c[0], P.c[1], P.s * 0.3 + e * P.s * 1.2, 0, Math.PI * 2); ctx.stroke();
-      if (q < 0.08) for (let j = 0; j < 14; j++)
-        dust.push({ x: P.c[0], y: P.c[1], a: Math.random() * Math.PI * 2, v: 0.8 + Math.random() * 1.6,
-                    life: 0.1, col: PLUMES[j % 5] });
+      const q = (now - b.born) / 1800, e = 1 - Math.pow(1 - q, 3);
+      ctx.save(); ctx.shadowColor = "rgba(255,220,160,0.9)"; ctx.shadowBlur = 12;
+      ctx.strokeStyle = `rgba(255,232,190,${(0.45 + b.power * 0.45) * (1 - q)})`; ctx.lineWidth = 1 + b.power * 0.9;
+      ctx.beginPath(); ctx.arc(X[0], X[1], 6 + e * P.s * (0.9 + b.power * 1.4), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      if (b.power > 0.3) {
+        ctx.strokeStyle = `rgba(160,200,255,${0.3 * (1 - q)})`; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(X[0], X[1], 6 + e * P.s * (0.5 + b.power), 0, Math.PI * 2); ctx.stroke();
+      }
+      if (!b.done) {
+        b.done = true;
+        const m = 14 + Math.round(b.power * 80);
+        for (let j = 0; j < m; j++)
+          dust.push({ x: X[0], y: X[1], a: Math.random() * Math.PI * 2,
+                      v: 0.6 + Math.random() * (1.4 + b.power * 2.2), life: 0.05, col: PLUMES[j % 5] });
+      }
     });
 
     if (!reduce) requestAnimationFrame(frame);
