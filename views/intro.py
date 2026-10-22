@@ -1,6 +1,7 @@
 """
-First-visit intro (about 3.6 seconds, once per browser session) and a
-short prism transition (about 1.3 seconds) when switching pages.
+First-visit intro (about 3.5 seconds, once per browser session) and a
+short prism transition (about 2 seconds) when switching pages. Each popup
+stays up until its drawing has fully finished, plus a short pause.
 
 A light popup over the blurred page: a frosted glass prism tilts up into
 view, a beam with a travelling gold spark enters it, light flashes at
@@ -8,12 +9,51 @@ the exit face and splits into five coloured lines that grow into a
 rising line chart, each ending in a dot. "PRISM" then appears letter by letter with the tagline,
 and the whole popup zooms gently away.
 
-The drawing itself is static/prism-intro.svg (animated with SMIL/CSS
-inside the file), because Streamlit strips inline <svg> from st.html.
+The drawings are static/prism-intro.svg and prism-transition.svg
+(animated with SMIL/CSS inside the file), embedded as data URIs because
+Streamlit strips inline <svg> from st.html.
 No JavaScript; it never blocks clicks once it has faded.
 """
 
+import base64
+import re
+from pathlib import Path
+
 import streamlit as st
+
+STATIC = Path(__file__).resolve().parent.parent / "static"
+HOLD = 0.5   # seconds the finished drawing stays on screen before fading
+
+
+def _svg(name):
+    return (STATIC / name).read_text(encoding="utf-8")
+
+
+def _animation_end(svg):
+    """Latest begin+dur of any SMIL animation in the drawing, in seconds."""
+    ends = [float(b) + float(d) for b, d in
+            re.findall(r'begin="([\d.]+)s"[^>]*?dur="([\d.]+)s"', svg)]
+    return max(ends, default=1.0)
+
+
+def _data_uri(svg, nonce=None):
+    """
+    Embed the drawing in the page so it starts the instant the popup does.
+    Loading it as a separate file let the popup's timer run while the image
+    was still downloading, so on slow loads the popup faded before the
+    drawing finished. A nonce makes each transition a distinct image so its
+    animation replays from the start.
+    """
+    if nonce is not None:
+        svg = svg.replace("</svg>", f"<!-- {nonce} --></svg>")
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+
+
+INTRO_SVG = _svg("prism-intro.svg")
+TRANSITION_SVG = _svg("prism-transition.svg")
+# Text in the intro finishes about 2.45 s in; take whichever ends later.
+INTRO_FADE = round(max(_animation_end(INTRO_SVG), 2.45) + HOLD + 0.2, 2)
+TRANSITION_FADE = round(max(_animation_end(TRANSITION_SVG), 0.8) + HOLD, 2)
 
 LETTERS = "PRISM"
 
@@ -29,7 +69,7 @@ INTRO_HTML = """
   display: flex; align-items: center; justify-content: center;
   background: rgba(244, 246, 248, 0.72);
   backdrop-filter: blur(8px) saturate(0.9); -webkit-backdrop-filter: blur(8px) saturate(0.9);
-  animation: pi-out 0.6s ease 3.05s forwards;
+  animation: pi-out 0.6s ease INTRO_FADEs forwards;
 }
 .pi-card {
   position: relative; overflow: hidden;
@@ -39,7 +79,7 @@ INTRO_HTML = """
   box-shadow: 0 30px 80px rgba(27, 37, 51, 0.18), 0 2px 10px rgba(27, 37, 51, 0.06);
   text-align: center;
   animation: pi-pop 0.6s cubic-bezier(.2,.9,.25,1.15) both,
-             pi-leave 0.6s cubic-bezier(.5,0,.75,0) 3.05s forwards;
+             pi-leave 0.6s cubic-bezier(.5,0,.75,0) INTRO_FADEs forwards;
 }
 .pi-card::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -81,13 +121,14 @@ INTRO_HTML = """
 </style>
 <div class="pi-overlay" aria-hidden="true">
   <div class="pi-card">
-    <img class="pi-art" src="/app/static/prism-intro.svg?v=4" alt="">
+    <img class="pi-art" src="INTRO_SRC" alt="">
     <div class="pi-word">LETTERS_HTML</div>
     <div class="pi-rule"></div>
     <div class="pi-tag">Factor intelligence for Indian markets</div>
   </div>
 </div>
-""".replace("LETTERS_HTML", _letters_html)
+""".replace("LETTERS_HTML", _letters_html).replace(
+    "INTRO_FADE", str(INTRO_FADE)).replace("INTRO_SRC", _data_uri(INTRO_SVG))
 
 
 TRANSITION_HTML = """
@@ -97,14 +138,14 @@ TRANSITION_HTML = """
   display: flex; align-items: center; justify-content: center;
   background: rgba(244, 246, 248, 0.80);
   backdrop-filter: blur(8px) saturate(0.9); -webkit-backdrop-filter: blur(8px) saturate(0.9);
-  animation: pt-out 0.35s ease 1.05s forwards;
+  animation: pt-out 0.35s ease TRANSITION_FADEs forwards;
 }
 .pt-card {
   text-align: center; background: #FFFFFF; border: 1px solid #E3E8EE;
   border-radius: 20px; padding: 22px 34px 22px 34px;
   box-shadow: 0 26px 70px rgba(27, 37, 51, 0.16), 0 2px 8px rgba(27, 37, 51, 0.05);
   animation: pt-in 0.3s cubic-bezier(.2,.9,.25,1.1) both,
-             pt-leave 0.35s cubic-bezier(.5,0,.75,0) 1.05s forwards;
+             pt-leave 0.35s cubic-bezier(.5,0,.75,0) TRANSITION_FADEs forwards;
 }
 @keyframes pt-leave { to { transform: scale(1.04); opacity: 0; } }
 .pt-art { display:block; width:300px; max-width:64vw; height:auto; margin:0 auto; }
@@ -123,7 +164,7 @@ TRANSITION_HTML = """
 </style>
 <div class="pt-overlay" aria-hidden="true" data-n="NONCE">
   <div class="pt-card">
-    <img class="pt-art" src="/app/static/prism-transition.svg?n=NONCE" alt="">
+    <img class="pt-art" src="TRANSITION_SRC" alt="">
     <div class="pt-dest">DEST</div>
   </div>
 </div>
@@ -144,6 +185,8 @@ def show(first_visit=True, transition_to=None, nonce=0):
         st.html(INTRO_HTML)
     elif transition_to:
         st.html(TRANSITION_HTML.replace("NONCE", str(nonce))
+                .replace("TRANSITION_FADE", str(TRANSITION_FADE))
+                .replace("TRANSITION_SRC", _data_uri(TRANSITION_SVG, nonce))
                 .replace("DEST", transition_to))
     else:
         st.html("<div hidden></div>")
