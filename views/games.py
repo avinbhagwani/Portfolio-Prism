@@ -83,8 +83,7 @@ def render_handle_it():
     with st.container(border=True):
         st.markdown("<div class='hi-step'>What do you want to invest in?</div>",
                     unsafe_allow_html=True)
-        kind_col, pick_col, cmp_col = st.columns([1.1, 2.4, 1.6], gap="medium",
-                                                 vertical_alignment="bottom")
+        kind_col, pick_col = st.columns([1.1, 4], gap="medium", vertical_alignment="bottom")
         with kind_col:
             kind = st.segmented_control("Type", ["Index", "Mutual fund"], default="Index",
                                         key="hi_kind", label_visibility="collapsed") or "Index"
@@ -94,7 +93,8 @@ def render_handle_it():
                 choice = st.selectbox("Index", ordered,
                                       index=ordered.index("NIFTY SMALLCAP 250")
                                       if "NIFTY SMALLCAP 250" in ordered else 0,
-                                      format_func=fm.pretty_name, key="hi_index")
+                                      format_func=fm.pretty_name, key="hi_index",
+                                      label_visibility="collapsed")
                 key, label = choice, fm.pretty_name(choice)
             else:
                 term = st.text_input("Fund", placeholder="Type at least 3 letters of a fund name",
@@ -107,20 +107,12 @@ def render_handle_it():
                     key, label = opts[name], name
                 elif term and len(term.strip()) >= 3:
                     st.caption("No funds found. Try another name.")
-        with cmp_col:
-            cmp_opts = ["None", "NIFTY 50", "NIFTY 500", "NIFTY 100", "NIFTY MIDCAP 150"]
-            if kind == "Index" and key in cmp_opts:
-                cmp_opts.remove(key)
-            compare = st.selectbox("Compare with", cmp_opts, index=1 if len(cmp_opts) > 1 else 0,
-                                   format_func=lambda n: "Nothing else" if n == "None"
-                                   else fm.pretty_name(n), key="hi_cmp")
 
     if not key:
         st.info("Search for a fund above to start.")
         return
     with st.spinner("Loading history..."):
-        data = payload("index" if kind == "Index" else "fund", key, label,
-                       None if compare == "None" else compare)
+        data = payload("index" if kind == "Index" else "fund", key, label)
     if data is None:
         st.warning("Couldn't load enough history for this one. Pick something with at least a few years of data, or try again in a minute.")
         return

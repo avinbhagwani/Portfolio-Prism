@@ -342,17 +342,14 @@ const D = __DATA__;
     $("best").textContent = parts.length ? "Your best · " + parts.join(" · ") : "";
   }
   showBest();
-  // shuffling tiles: leadership keeps changing
+  // shuffling tiles: the order keeps changing, but nothing here gives away a real result
   const shcol = $("shcol");
   IDX.forEach(i => { const d = document.createElement("div"); d.className = "sh-tile"; d.style.background = i.color;
-    d.dataset.k = i.key; d.innerHTML = `${i.short}<small></small>`; shcol.appendChild(d); });
-  let shYear = 1;
+    d.dataset.k = i.key; d.innerHTML = `${i.short}<small>?</small>`; shcol.appendChild(d); });
+  const lab = document.createElement("div"); lab.className = "sh-q"; lab.textContent = "WHO WINS NEXT?"; shcol.appendChild(lab);
   function shuffle() {
-    const y = YEARS[shYear % YEARS.length]; shYear++;
-    rankYear(y).forEach((k, r) => { const el = shcol.querySelector(`[data-k="${k}"]`);
-      el.style.top = (r * 58) + "px"; el.querySelector("small").textContent = pct0(ret(k, y)); });
-    let lab = shcol.querySelector(".sh-q"); if (!lab) { lab = document.createElement("div"); lab.className = "sh-q"; shcol.appendChild(lab); }
-    lab.textContent = y === YEARS[0] && D.partialFirst ? `${D.partialFirst.toUpperCase()}` : `${y} WINNERS`;
+    const order = [...KEYS].sort(() => Math.random() - 0.5);
+    order.forEach((k, r) => { shcol.querySelector(`[data-k="${k}"]`).style.top = (r * 58) + "px"; });
   }
   shuffle(); let shTimer = setInterval(shuffle, 1500);
 

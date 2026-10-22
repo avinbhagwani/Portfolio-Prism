@@ -7,7 +7,9 @@ just before the deepest falls, and hand the browser:
 
   levels     weekly closing levels (Friday, or the last trading day)
   scenarios  the deepest drawdown episodes: peak, trough, recovery
-  compare    an optional second series (an index) on the same weeks
+  cash       what the same money would have earned in cash, on the same
+             weeks: RBI's repo rate until 2011, then NSE's Nifty 1D Rate
+             index (the overnight rate), so the rate is the one of the time
 
 Everything else (investing at the peak, the monthly SIP, XIRR, the
 "sell" button) is simulated in the browser so playback is smooth.
@@ -24,6 +26,20 @@ from core.index_analytics import find_drawdown_episodes
 
 MIN_DEPTH = -15        # only falls at least this deep (%) make a scenario
 MAX_SCENARIOS = 4
+
+# RBI repo rate changes (date, % a year) used for cash before the Nifty 1D
+# Rate index starts in January 2011. Source: RBI policy announcements.
+REPO = [
+    ("1995-01-01", 9.0), ("2000-11-06", 10.0), ("2001-03-09", 9.0), ("2001-04-30", 8.75),
+    ("2001-06-07", 8.5), ("2002-03-28", 8.0), ("2002-11-12", 7.5), ("2003-03-07", 7.1),
+    ("2003-03-19", 7.0), ("2004-03-31", 6.0), ("2005-10-26", 6.25), ("2006-01-24", 6.5),
+    ("2006-07-25", 7.0), ("2006-10-30", 7.25), ("2007-01-31", 7.5), ("2007-03-30", 7.75),
+    ("2008-06-12", 8.0), ("2008-06-25", 8.5), ("2008-07-30", 9.0), ("2008-10-20", 8.0),
+    ("2008-11-03", 7.5), ("2008-12-08", 6.5), ("2009-01-05", 5.5), ("2009-03-05", 5.0),
+    ("2009-04-21", 4.75), ("2010-03-19", 5.0), ("2010-04-20", 5.25), ("2010-07-02", 5.5),
+    ("2010-07-27", 5.75), ("2010-09-16", 6.0), ("2010-11-02", 6.25),
+]
+CASH_INDEX = "NIFTY 1D RATE INDEX"
 
 PRESETS = [
     "NIFTY 50", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250", "NIFTY MICROCAP 250",
@@ -66,6 +82,19 @@ def _series_points(weekly):
 
 
 @st.cache_data(show_spinner=False)
+def cash_daily():
+    """A daily 'cash' level: repo-rate accrual until the 1D Rate index
+    starts, then that index, joined so the line is continuous."""
+    from core.index_data import load_index_history
+    one_d = load_index_history()[CASH_INDEX].dropna()
+    days = pd.date_range("1995-01-01", one_d.index[0], freq="D")
+    rate = pd.Series({pd.Timestamp(d): r for d, r in REPO}).reindex(days, method="ffill")
+    early = (1 + rate / 100 / 365).cumprod()
+    early = early / early.iloc[-1] * one_d.iloc[0]
+    return pd.concat([early.iloc[:-1], one_d]).sort_index()
+
+
+@st.cache_data(show_spinner=False)
 def index_daily(name):
     return fm.levels_to_as_of([name])[name].dropna()
 
@@ -78,7 +107,7 @@ def fund_daily(code):
 
 
 @st.cache_data(show_spinner=False, ttl=3600)
-def payload(kind, key, label, compare_name=None):
+def payload(kind, key, label):
     """kind 'index' (key = index name) or 'fund' (key = scheme code)."""
     daily = index_daily(key) if kind == "index" else fund_daily(key)
     if daily.empty or len(daily) < 300:
@@ -90,14 +119,8 @@ def payload(kind, key, label, compare_name=None):
         "levels": _series_points(weekly),
         "scenarios": _scenarios(daily),
         "asOf": f"{daily.index.max():%d %b %Y}",
-        "compare": None,
     }
-    if compare_name:
-        cmp_daily = index_daily(compare_name)
-        cmp_weekly = _weekly(cmp_daily).reindex(weekly.index, method="ffill")
-        cmp_weekly = cmp_weekly.where(cmp_weekly.index >= cmp_daily.index.min())
-        data["compare"] = {
-            "name": fm.pretty_name(compare_name),
-            "levels": [None if pd.isna(v) else float(f"{v:.6g}") for v in cmp_weekly.values],
-        }
+    cash = cash_daily()
+    cash_w = cash.reindex(cash.index.union(weekly.index)).interpolate("time").reindex(weekly.index).ffill().bfill()
+    data["cash"] = [float(f"{v:.8g}") for v in cash_w.values]
     return json.dumps(data, separators=(",", ":"))
