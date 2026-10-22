@@ -2,7 +2,7 @@
 PRISM's left navigation: a navy panel with the wordmark and tagline,
 pages grouped into sections (each with an icon tile and a one-line
 description), a clear active state, a "coming soon" item, and a footer
-with data freshness and contact details pinned to the bottom.
+with contact details pinned to the bottom.
 
 Links are st.page_link, so moving between pages is instant and keeps
 the session (the intro does not replay).
@@ -10,7 +10,6 @@ the session (the intro does not replay).
 
 import streamlit as st
 
-from core.fbi_metrics import as_of_date
 
 SECTIONS = [
     ("Analyse", [
@@ -66,11 +65,6 @@ section[data-testid="stSidebar"] > div {padding-top: 0.4rem;}
 .ps-foot {border-top:1px solid #22405B; padding-top:1rem; margin-top:1.2rem;
   font-size:0.78rem; color:#7F98B0; line-height:1.55;}
 .ps-foot a {color:#B9CCDD; text-decoration:none; border-bottom:1px solid #3A5874;}
-.ps-fresh {display:inline-flex; align-items:center; gap:7px; background:#17324A;
-  color:#C9D7E4; font-size:0.76rem; padding:5px 10px; border-radius:999px;
-  margin-bottom:0.8rem;}
-.ps-dot {width:7px; height:7px; border-radius:50%; background:#5FBF8A;
-  box-shadow:0 0 0 3px rgba(95,191,138,0.18);}
 </style>
 """
 
@@ -111,9 +105,7 @@ def render(pages, active_path):
                 st.page_link(pages[path], label=label, icon=icon,
                              disabled=path in DISABLED, width="stretch")
         st.markdown(
-            f"<div class='ps-foot'>"
-            f"<div class='ps-fresh'><span class='ps-dot'></span>"
-            f"Data to {as_of_date():%d %b %Y}</div><br>"
+            "<div class='ps-foot'>"
             "Questions, bugs or ideas?<br>"
             "<a href='https://www.linkedin.com/in/avinbhagwani69/' target='_blank'>LinkedIn</a>"
             " &nbsp;\u00b7&nbsp; <a href='mailto:avinbhagwani69@gmail.com'>Email</a>"
