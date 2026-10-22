@@ -22,7 +22,7 @@ SECTIONS = [
     ]),
     ("Read", [
         ("writing", "Writing", ":material/edit_note:",
-         "Articles by Avin"),
+         "My Substack"),
     ]),
     ("Coming soon", [
         ("efficient-frontier", "Efficient Frontier", ":material/scatter_plot:",

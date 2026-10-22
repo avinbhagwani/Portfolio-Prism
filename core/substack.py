@@ -24,7 +24,7 @@ SUBSTACK_URL = "https://avinb.substack.com"
 FEED_URL = f"{SUBSTACK_URL}/feed"
 SUBSCRIBE_URL = f"{SUBSTACK_URL}/subscribe"
 EMBED_URL = f"{SUBSTACK_URL}/embed"
-PUBLICATION = "Avin's Substack"
+PUBLICATION = "my Substack"  # shown in the author's own voice
 
 # For local testing without network: point this at a saved feed.xml
 FEED_FILE_ENV = "PRISM_SUBSTACK_FEED_FILE"
