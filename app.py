@@ -12,7 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 from views import (factor_analysis, factor_indexes, drawdown_analysis, coming_soon,
-                   intro, sidebar, writing)
+                   home, intro, sidebar, writing)
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -41,8 +41,10 @@ def _efficient_frontier():
 
 
 PAGES = [
+    st.Page(home.render, title="Home", icon=":material/home:",
+            url_path="home", default=True),
     st.Page(factor_analysis.render, title="Factor Analysis",
-            icon=":material/insights:", url_path="factor-analysis", default=True),
+            icon=":material/insights:", url_path="factor-analysis"),
     st.Page(factor_indexes.render, title="FBI Intelligence",
             icon=":material/query_stats:", url_path="fbi-intelligence"),
     st.Page(drawdown_analysis.render, title="Drawdown Analysis",
@@ -54,9 +56,10 @@ PAGES = [
 ]
 
 page = st.navigation(PAGES, position="hidden")
-current = page.url_path or "factor-analysis"
-pages_by_path = {p.url_path or "factor-analysis": p for p in PAGES}
+current = page.url_path or "home"
+pages_by_path = {p.url_path or "home": p for p in PAGES}
 writing.PAGES = pages_by_path
+home.PAGES = pages_by_path
 
 # Overlay slot: full intro on the first visit, a short prism transition
 # naming the destination when the visitor switches pages, empty

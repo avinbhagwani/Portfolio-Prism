@@ -14,6 +14,9 @@ from core.substack import SUBSTACK_URL, tracked
 
 
 SECTIONS = [
+    ("", [
+        ("home", "Home", ":material/home:", "What PRISM is"),
+    ]),
     ("Analyse", [
         ("factor-analysis", "Factor Analysis", ":material/insights:",
          "What drives a fund"),
@@ -77,7 +80,7 @@ section[data-testid="stSidebar"] > div {padding-top: 0.4rem;}
 
 def _sel(path):
     # page links use relative hrefs; the default page's href is empty
-    href = "" if path == "factor-analysis" else path
+    href = "" if path == "home" else path
     return f'[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][href="{href}"]'
 
 
@@ -106,7 +109,8 @@ def render(pages, active_path):
         st.markdown("<div class='ps-tag'>Factor intelligence for India</div>",
                     unsafe_allow_html=True)
         for title, items in SECTIONS:
-            st.markdown(f"<div class='ps-sec'>{title}</div>", unsafe_allow_html=True)
+            if title:
+                st.markdown(f"<div class='ps-sec'>{title}</div>", unsafe_allow_html=True)
             for path, label, icon, _ in items:
                 st.page_link(pages[path], label=label, icon=icon,
                              disabled=path in DISABLED, width="stretch")
