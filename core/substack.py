@@ -147,3 +147,89 @@ def load_body(slug):
     r = requests.get(f"{SUBSTACK_URL}/api/v1/posts/{slug}", headers=HEADERS, timeout=10)
     r.raise_for_status()
     return r.json().get("body_html") or ""
+
+
+# ---------------------------------------------------------------------
+# Preview and attribution
+# ---------------------------------------------------------------------
+
+UTM = {"utm_source": "prism", "utm_medium": "referral", "utm_campaign": "writing"}
+
+
+def tracked(url, content=None):
+    """Add utm tags so Substack's stats show traffic coming from PRISM."""
+    from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
+    parts = urlsplit(url)
+    q = dict(parse_qsl(parts.query))
+    q.update(UTM)
+    if content:
+        q["utm_content"] = content
+    return urlunsplit(parts._replace(query=urlencode(q)))
+
+
+_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+         "meta", "source", "track", "wbr"}
+
+
+def _top_level_blocks(body):
+    """Split article HTML into its top-level elements (paragraphs, headings,
+    image blocks, quotes, lists) without breaking any element in half."""
+    from html.parser import HTMLParser
+
+    line_starts = [0]
+    for m in re.finditer("\n", body):
+        line_starts.append(m.end())
+
+    class Splitter(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.depth, self.start, self.ends = 0, 0, []
+
+        def _offset(self):
+            line, col = self.getpos()
+            return line_starts[line - 1] + col
+
+        def handle_starttag(self, tag, attrs):
+            if self.depth == 0:
+                self.start = self._offset()
+            if tag not in _VOID:
+                self.depth += 1
+            elif self.depth == 0:
+                self.ends.append((self.start, self._offset() + len(self.get_starttag_text())))
+
+        def handle_endtag(self, tag):
+            if tag in _VOID:
+                return
+            self.depth = max(0, self.depth - 1)
+            if self.depth == 0:
+                end = body.find(">", self._offset()) + 1
+                self.ends.append((self.start, end))
+
+    s = Splitter()
+    s.feed(body)
+    s.close()
+    return [body[a:b] for a, b in s.ends if b > a]
+
+
+def preview(body, share=0.33, min_words=120):
+    """
+    The opening of an article: whole top-level blocks until about `share`
+    of the words (at least `min_words`), always ending on a text block.
+    Returns (preview_html, remaining_words); remaining_words is 0 when the
+    article is short enough to show in full.
+    """
+    blocks = _top_level_blocks(body) or [body]
+    counts = [len(_strip_tags(b).split()) for b in blocks]
+    total = sum(counts)
+    target = max(min_words, int(total * share))
+    if total <= target * 1.4:
+        return body, 0
+    taken, words = [], 0
+    for block, n in zip(blocks, counts):
+        taken.append(block)
+        words += n
+        if words >= target and n > 0:
+            break
+    while taken and len(_strip_tags(taken[-1]).split()) == 0:
+        taken.pop()
+    return "".join(taken), max(0, total - words)
