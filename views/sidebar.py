@@ -20,6 +20,10 @@ SECTIONS = [
         ("drawdown-analysis", "Drawdown Analysis", ":material/trending_down:",
          "Falls and recoveries"),
     ]),
+    ("Read", [
+        ("writing", "Writing", ":material/edit_note:",
+         "Articles by Avin"),
+    ]),
     ("Coming soon", [
         ("efficient-frontier", "Efficient Frontier", ":material/scatter_plot:",
          "Best risk-return mix"),
@@ -107,6 +111,8 @@ def render(pages, active_path):
         st.markdown(
             "<div class='ps-foot'>"
             "Questions, bugs or ideas?<br>"
+            "<a href='https://avinb.substack.com/subscribe' target='_blank'>Substack</a>"
+            " &nbsp;\u00b7&nbsp; "
             "<a href='https://www.linkedin.com/in/avinbhagwani69/' target='_blank'>LinkedIn</a>"
             " &nbsp;\u00b7&nbsp; <a href='mailto:avinbhagwani69@gmail.com'>Email</a>"
             "</div>",
