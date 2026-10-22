@@ -1,5 +1,6 @@
 """
-First-visit intro, about 3.6 seconds, once per browser session.
+First-visit intro (about 3.6 seconds, once per browser session) and a
+short prism transition (about 1.3 seconds) when switching pages.
 
 A light popup over the blurred page: a frosted glass prism tilts up into
 view, a beam with a travelling gold spark enters it, light flashes at
@@ -89,5 +90,60 @@ INTRO_HTML = """
 """.replace("LETTERS_HTML", _letters_html)
 
 
-def show(first_visit=True):
-    st.html(INTRO_HTML if first_visit else "<div hidden></div>")
+TRANSITION_HTML = """
+<style>
+.pt-overlay {
+  position: fixed; inset: 0; z-index: 1000000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(244, 246, 248, 0.80);
+  backdrop-filter: blur(8px) saturate(0.9); -webkit-backdrop-filter: blur(8px) saturate(0.9);
+  animation: pt-out 0.35s ease 1.05s forwards;
+}
+.pt-card {
+  text-align: center; background: #FFFFFF; border: 1px solid #E3E8EE;
+  border-radius: 20px; padding: 22px 34px 22px 34px;
+  box-shadow: 0 26px 70px rgba(27, 37, 51, 0.16), 0 2px 8px rgba(27, 37, 51, 0.05);
+  animation: pt-in 0.3s cubic-bezier(.2,.9,.25,1.1) both,
+             pt-leave 0.35s cubic-bezier(.5,0,.75,0) 1.05s forwards;
+}
+@keyframes pt-leave { to { transform: scale(1.04); opacity: 0; } }
+.pt-art { display:block; width:300px; max-width:64vw; height:auto; margin:0 auto; }
+.pt-dest {
+  font-family: Inter, sans-serif; font-weight: 600; font-size: 17px; color: #1B2533;
+  letter-spacing: 0.01em; margin-top: 6px; opacity: 0; transform: translateY(6px);
+  animation: pt-rise 0.35s ease 0.45s forwards;
+}
+@keyframes pt-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes pt-rise { to { opacity: 1; transform: none; } }
+@keyframes pt-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .pt-overlay { animation-delay: 0.3s; }
+  .pt-dest { animation-delay: 0s; animation-duration: 0.01s; }
+}
+</style>
+<div class="pt-overlay" aria-hidden="true" data-n="NONCE">
+  <div class="pt-card">
+    <img class="pt-art" src="/app/static/prism-transition.svg?n=NONCE" alt="">
+    <div class="pt-dest">DEST</div>
+  </div>
+</div>
+"""
+
+
+def show(first_visit=True, transition_to=None, nonce=0):
+    """
+    Render the overlay slot. Always called (empty when nothing plays) so
+    every element below keeps its position between reruns; otherwise
+    Streamlit would reset the page's tabs on the next click.
+
+    first_visit    full intro, once per session
+    transition_to  short prism transition naming the destination page;
+                   nonce makes each one a fresh element so it replays
+    """
+    if first_visit:
+        st.html(INTRO_HTML)
+    elif transition_to:
+        st.html(TRANSITION_HTML.replace("NONCE", str(nonce))
+                .replace("DEST", transition_to))
+    else:
+        st.html("<div hidden></div>")

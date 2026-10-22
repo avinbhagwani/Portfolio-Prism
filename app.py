@@ -11,7 +11,8 @@ from pathlib import Path
 
 import streamlit as st
 
-from views import factor_analysis, factor_indexes, drawdown_analysis, coming_soon, intro, sidebar
+from views import (factor_analysis, factor_indexes, drawdown_analysis, coming_soon,
+                   intro, sidebar, writing)
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -35,14 +36,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Always render the intro slot (empty after the first run) so every
-# element below keeps the same position between reruns. If it vanished,
-# Streamlit would treat the page's tabs as new and reset them to the
-# first tab on the visitor's first click.
-intro.show(first_visit=not st.session_state.get("intro_shown"))
-st.session_state["intro_shown"] = True
-
-
 def _efficient_frontier():
     coming_soon.render("Efficient Frontier")
 
@@ -54,11 +47,33 @@ PAGES = [
             icon=":material/query_stats:", url_path="fbi-intelligence"),
     st.Page(drawdown_analysis.render, title="Drawdown Analysis",
             icon=":material/trending_down:", url_path="drawdown-analysis"),
+    st.Page(writing.render, title="Writing",
+            icon=":material/edit_note:", url_path="writing"),
     st.Page(_efficient_frontier, title="Efficient Frontier",
             icon=":material/scatter_plot:", url_path="efficient-frontier"),
 ]
 
 page = st.navigation(PAGES, position="hidden")
-sidebar.render({p.url_path or "factor-analysis": p for p in PAGES},
-               page.url_path or "factor-analysis")
+current = page.url_path or "factor-analysis"
+pages_by_path = {p.url_path or "factor-analysis": p for p in PAGES}
+writing.PAGES = pages_by_path
+
+# Overlay slot: full intro on the first visit, a short prism transition
+# naming the destination when the visitor switches pages, empty
+# otherwise. Always rendered so elements below keep their positions
+# between reruns (otherwise tabs would reset on the next click).
+first_visit = not st.session_state.get("intro_shown")
+previous = st.session_state.get("last_page")
+switched = previous is not None and previous != current
+if switched:
+    st.session_state["transition_n"] = st.session_state.get("transition_n", 0) + 1
+intro.show(
+    first_visit=first_visit,
+    transition_to=page.title if switched else None,
+    nonce=st.session_state.get("transition_n", 0),
+)
+st.session_state["intro_shown"] = True
+st.session_state["last_page"] = current
+
+sidebar.render(pages_by_path, current)
 page.run()
