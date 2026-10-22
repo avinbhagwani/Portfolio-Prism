@@ -47,7 +47,9 @@ section[data-testid="stSidebar"] > div {padding-top: 0.4rem;}
 [data-testid="stSidebarUserContent"] [data-testid="stElementContainer"]:last-child {
   margin-top: auto;}
 
-.ps-tag {color:#8FA6BC; font-size:0.8rem; margin:-0.2rem 0 1.2rem 0.55rem;}
+.ps-by {color:#E0B15C; font-size:0.8rem; font-weight:500; letter-spacing:0.02em;
+  margin:-0.35rem 0 0.15rem 0.55rem;}
+.ps-tag {color:#8FA6BC; font-size:0.8rem; margin:0 0 1.2rem 0.55rem;}
 .ps-sec {color:#6F89A3; font-size:0.68rem; font-weight:600; letter-spacing:0.12em;
   text-transform:uppercase; margin:1.3rem 0 0.55rem 0.55rem;}
 
@@ -106,7 +108,8 @@ def render(pages, active_path):
     """pages: {url_path: st.Page}; active_path: url_path of current page."""
     with st.sidebar:
         st.markdown(BASE_CSS + _per_link_css(active_path), unsafe_allow_html=True)
-        st.markdown("<div class='ps-tag'>Factor intelligence for India</div>",
+        st.markdown("<div class='ps-by'>by Avin Bhagwani</div>"
+                    "<div class='ps-tag'>Factor intelligence for India</div>",
                     unsafe_allow_html=True)
         for title, items in SECTIONS:
             if title:
