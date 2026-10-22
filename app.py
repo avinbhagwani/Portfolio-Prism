@@ -51,6 +51,8 @@ PAGES = [
             icon=":material/trending_down:", url_path="drawdown-analysis"),
     st.Page(games.render_try_to_time, title="Try to Time",
             icon=":material/sports_esports:", url_path="try-to-time"),
+    st.Page(games.render_handle_it, title="Can You Handle It?",
+            icon=":material/monitor_heart:", url_path="can-you-handle-it"),
     st.Page(writing.render, title="Writing",
             icon=":material/edit_note:", url_path="writing"),
     st.Page(_efficient_frontier, title="Efficient Frontier",
