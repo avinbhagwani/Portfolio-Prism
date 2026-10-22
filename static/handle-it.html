@@ -127,6 +127,16 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .crow.cash .bar i { background: var(--cash); }
 .crow .v { text-align: right; font-weight: 600; font-size: 14.5px; }
 .crow .v small { display: block; font-size: 11.5px; color: var(--muted); font-weight: 500; }
+.period { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: -6px 0 10px 0; }
+.period b { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.period span { font-size: 14px; color: var(--muted); }
+.storms { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 22px 0; }
+.storm { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; padding: 5px 10px; border-radius: 999px;
+  background: #EEF3F8; color: var(--navy); opacity: 0; animation: rise .45s var(--ease) forwards; }
+.storm i { font-style: normal; font-size: 11px; color: var(--muted); font-weight: 500; }
+.storm.sold { background: #FBECEC; color: var(--red); }
+.storm.missed { background: var(--soft); color: var(--muted); }
+.storm svg { width: 12px; height: 12px; }
 .gap { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--soft); font-size: 14px; line-height: 1.5; color: var(--ink2); }
 .gap b { color: var(--ink); }
 .e-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; }
@@ -204,6 +214,8 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   <div class="eyebrow" id="e-eyebrow"></div>
   <div class="e-h" id="e-h"></div>
   <p class="e-p" id="e-p"></p>
+  <div class="period" id="period"></div>
+  <div class="storms" id="storms"></div>
   <div class="e-grid">
     <div>
       <div class="lbl">What you went through</div>
@@ -233,12 +245,19 @@ const D = __DATA__;
   const DAY = 864e5, YR = 365 * DAY;
 
   // names for the famous falls, revealed only at the end
+  // market storms, by when they hit; revealed only at the end
   const CRISES = [
-    ["1999-12", "2000-04", "the dot-com bust"], ["2007-10", "2008-02", "the 2008 global financial crisis"],
-    ["2010-10", "2011-01", "the 2011 euro-crisis slump"], ["2015-01", "2015-08", "the 2015–16 slowdown"],
-    ["2017-12", "2018-09", "the 2018 small and midcap crash"], ["2019-12", "2020-02", "the Covid crash"],
-    ["2021-09", "2022-01", "the 2022 rate-hike sell-off"], ["2024-07", "2024-12", "the 2024–25 correction"],
-  ];
+    ["2000-02", "2001-09", "Dot-com bust", "the dot-com bust", "Dot-com"],
+    ["2006-05", "2006-06", "May 2006 crash", "the May 2006 crash", "2006"],
+    ["2008-01", "2009-03", "Global financial crisis", "the 2008 global financial crisis", "GFC"],
+    ["2010-11", "2011-12", "Euro debt crisis", "the 2011 euro-crisis slump", "Euro crisis"],
+    ["2013-05", "2013-08", "Taper tantrum", null, "Taper"],
+    ["2015-03", "2016-02", "2015–16 slowdown", "the 2015–16 slowdown", "Slowdown"],
+    ["2018-01", "2019-08", "Small and midcap crash", "the 2018 small and midcap crash", "2018 crash"],
+    ["2020-02", "2020-04", "Covid crash", "the Covid crash", "Covid"],
+    ["2022-01", "2022-06", "Rate hikes and Ukraine war", "the 2022 rate-hike sell-off", "2022"],
+    ["2024-09", "2025-04", "2024–25 correction", "the 2024–25 correction", "2024–25"],
+  ].map(([a, b, n, long, tag]) => ({ a: Date.parse(a + "-01T00:00:00Z"), b: Date.parse(b + "-28T00:00:00Z"), n, long, tag }));
 
   // ---------- formatting ----------
   const inr = v => (v < 0 ? "−" : "") + "₹" + Math.round(Math.abs(v)).toLocaleString("en-IN");
@@ -516,9 +535,8 @@ const D = __DATA__;
   }
 
   // ---------- end ----------
-  function crisisName(t) {
-    const ym = new Date(t).toISOString().slice(0, 7);
-    const c = CRISES.find(([a, b]) => ym >= a && ym <= b); return c ? c[2] : null;
+  function crisisName(t) {           // the storm this peak led into
+    const c = CRISES.find(c => c.long && t >= c.a - 75 * DAY && t <= c.b); return c ? c.long : null;
   }
   function finish() {
     const R = G.rows, n = R.length, endR = R[n - 1];
@@ -526,7 +544,19 @@ const D = __DATA__;
     const mine = G.sold ? { val: G.sold.val, inv: G.sold.inv, x: xirr(G.flows.filter(f => f.i <= G.sold.i), G.sold.t, G.sold.val) } : stay;
     const cash = { val: endR.cash, x: xirr(G.flows, endR.t, endR.cash) };
     const name = crisisName(R[0].t);
-    $("e-eyebrow").textContent = `${D.name} · ${name ? "This was " + name + ", " : ""}${monthName(R[0].t)} to ${monthName(endR.t)}`;
+    $("e-eyebrow").textContent = `${D.name}${name ? " · this was " + name : ""}`;
+    // the real period, and every storm along the way
+    const soldT = G.sold ? G.sold.t : null;
+    $("period").innerHTML = `<b>${monthName(R[0].t)} → ${monthName(endR.t)}</b><span>${dur(endR.t - R[0].t)}, starting at the peak</span>`;
+    const storms = CRISES.filter(c => c.b >= R[0].t - 75 * DAY && c.a <= endR.t);
+    const tick = `<svg viewBox="0 0 12 12"><path d="M2.5 6.5l2.3 2.3L9.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    G.survived = storms.filter(c => !soldT || c.b < soldT);
+    $("storms").innerHTML = storms.map((c, i) => {
+      const yr = new Date(c.a).getUTCFullYear(), during = soldT && soldT >= c.a && soldT <= c.b + 31 * DAY, after = soldT && c.a > soldT;
+      const cls = during ? "sold" : after ? "missed" : "";
+      const tag = during ? "you sold here" : after ? "after you sold" : "survived";
+      return `<span class="storm ${cls}" style="animation-delay:${150 + i * 60}ms">${!cls ? tick : ""}${c.n} <i>${yr} · ${tag}</i></span>`;
+    }).join("");
     const stillUnder = endR.val < endR.inv;
     let h, p;
     if (!G.sold) {
@@ -534,14 +564,16 @@ const D = __DATA__;
         p = `This fall hasn't finished yet: you're at ${pct((endR.val / endR.inv - 1) * 100, 0)} today, ${dur(G.longestUnder)} after it started.
           That's the hardest place to be, and where patience is actually tested. You didn't press the button.`; }
       else { h = G.maxPain <= -0.3 || G.longestUnder >= YR ? "You handled it." : "You handled it. This time it was gentle.";
-        p = `You sat through a fall of <b>${pct(G.maxPain * 100, 0)}</b> and <b>${dur(G.longestUnder)}</b> underwater without selling.
+        const sv = G.survived.map(c => c.n.replace(/^(.)/, m => m.toLowerCase()).replace("covid", "Covid").replace("iL&FS", "IL&FS").replace("euro", "euro"));
+        const list = sv.length > 3 ? `the ${sv[0]}, the ${sv[1]} and ${sv.length - 2} more` : sv.length ? sv.map(x => "the " + x).join(sv.length === 2 ? " and " : ", ") : "";
+        p = `${list ? `You survived ${list}. ` : ""}You sat through a fall of <b>${pct(G.maxPain * 100, 0)}</b> and <b>${dur(G.longestUnder)}</b> underwater without selling.
           ${G.sip && G.underSips ? `<b>${G.underSips}</b> of your SIP instalments went in while you were down; those bought the cheapest units of the whole ride. ` : ""}
           Your ${short(stay.inv)} became <b>${short(stay.val)}</b>${stay.x != null ? `, ${pct(stay.x)} a year` : ""}.`; }
     } else {
       const better = stay.val > mine.val, d = Math.abs(stay.val - mine.val);
       h = `You blinked at ${pct(G.sold.pnl * 100, 0)}.`;
       p = better
-        ? `You sold ${dur(G.sold.t - R[0].t)} in. Holding on would have turned your ${short(stay.inv)} into <b>${short(stay.val)}</b>${stay.x != null ? ` (${pct(stay.x)} a year)` : ""}.
+        ? `You sold in ${monthName(G.sold.t)}, ${dur(G.sold.t - R[0].t)} in, and then sat out the recovery. Holding on would have turned your ${short(stay.inv)} into <b>${short(stay.val)}</b>${stay.x != null ? ` (${pct(stay.x)} a year)` : ""}.
            Selling locked in ${short(mine.val)}, <b>${short(d)} less</b>. The fall was temporary. The exit made it permanent.`
         : `This time selling saved you ${short(d)}: it's still lower today. But you'd also have had to know when to get back in, and almost nobody does.`;
     }
@@ -578,6 +610,14 @@ const D = __DATA__;
     const vals = R.flatMap((q, i) => [q.val, q.inv, q.cash, myVal(i)]).map(tf);
     const lo0 = Math.min(...vals), hi0 = Math.max(...vals), pv = (hi0 - lo0) * .05, lo = lo0 - pv, hi = hi0 + pv;
     const X = i => pad + i / (n - 1) * (Wd - pad * 2), Y = v => pad + (1 - (tf(v) - lo) / (hi - lo)) * (Hd - pad * 2);
+    // storms as faint bands, so the chart and the list above tell the same story
+    const iAt = t => { let k = 0; while (k < n - 1 && R[k].t < t) k++; return k; };
+    x.font = "600 10px Inter, system-ui"; x.textAlign = "center";
+    CRISES.filter(c => c.b >= R[0].t && c.a <= R[n - 1].t).forEach(c => {
+      const xa = X(iAt(c.a)), xb = Math.max(X(iAt(c.b)), xa + 3);
+      x.fillStyle = "rgba(27,37,51,.05)"; x.fillRect(xa, pad, xb - xa, Hd - pad * 2);
+      if (xb - xa > x.measureText(c.tag).width + 4) { x.fillStyle = "#8A939E"; x.fillText(c.tag, (xa + xb) / 2, Hd - 4); }
+    });
     for (let i = 1; i < n; i++) { x.fillStyle = R[i].val < R[i].inv ? "rgba(210,63,74,.2)" : "rgba(46,139,87,.12)";
       x.beginPath(); x.moveTo(X(i - 1), Y(R[i - 1].val)); x.lineTo(X(i), Y(R[i].val)); x.lineTo(X(i), Y(R[i].inv)); x.lineTo(X(i - 1), Y(R[i - 1].inv)); x.fill(); }
     const path = (get, col, w, dash) => { x.strokeStyle = col; x.lineWidth = w; x.setLineDash(dash || []); x.beginPath();
