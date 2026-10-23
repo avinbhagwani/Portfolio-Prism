@@ -2,8 +2,10 @@
 Drawdown Analysis: how far indices and mutual funds fell, how long they
 stayed down, and whether they have recovered, in the FBI Intelligence style.
 
-  Controls   up to 10 series in any mix: Nifty indices (multiselect) and
-             mutual funds (search, then add); a period
+  Controls   up to 10 picks in any mix, added from one picker (Index or
+             Mutual fund, with quick-add buttons for common indices) and
+             shown as removable chips in their chart colours; a period;
+             same start for all, or each from its own start
   Headline   the worst fall and recovery; with several series, who fell
              most, who held up best, who stayed down longest
   Summary    cards for up to 3 series, a ranked table beyond that
@@ -46,8 +48,22 @@ CSS = """
 .dd-legend {display:flex; flex-wrap:wrap; gap:6px 16px; margin:0.5rem 0 0 0; font-size:0.86rem; color:#4A5562;}
 .dd-legend span {display:inline-flex; align-items:center;}
 .dd-tag {font-size:0.7rem; font-weight:600; color:#8A939E; letter-spacing:0.04em; margin-left:6px;}
-.dd-funds-label {font-size:0.875rem; color:#31333F; margin:0.6rem 0 0.25rem 0;}
-.dd-count {font-size:0.82rem; color:#8A939E; margin:0.4rem 0 0 0;}
+.dd-head {display:flex; justify-content:space-between; align-items:baseline; margin:0 0 0.2rem 0;}
+.dd-head b {font-size:0.95rem; font-weight:600; color:#1B2533;}
+.dd-head span {font-size:0.82rem; color:#8A939E;}
+.dd-hint {font-size:0.8rem; color:#8A939E; margin:0.1rem 0 0 0;}
+/* chosen series as chips, each with its chart colour */
+.st-key-dd_chips button {border-radius:999px !important; border:1px solid #E1E5EA !important; background:#fff !important;
+  padding:0.2rem 0.55rem 0.2rem 0.7rem !important; min-height:0 !important; box-shadow:none !important;}
+.st-key-dd_chips button:hover {border-color:#B54A3C !important; background:#FFF7F6 !important;}
+.st-key-dd_chips button p {font-size:0.86rem !important; font-weight:500 !important; color:#1B2533 !important;}
+.st-key-dd_chips button p::before {content:""; display:inline-block; width:9px; height:9px; border-radius:50%;
+  margin-right:7px; vertical-align:0; background:var(--dot, #8A939E);}
+.st-key-dd_chips [data-testid="stIconMaterial"] {color:#9AA3AE !important; font-size:16px !important;}
+.st-key-dd_quick button {border-radius:999px !important; border:1px dashed #C9D2DC !important; background:transparent !important;
+  padding:0.15rem 0.6rem !important; min-height:0 !important;}
+.st-key-dd_quick button p {font-size:0.8rem !important; color:#4A5562 !important;}
+.st-key-dd_quick button:hover {border-color:#1F4E79 !important;}
 </style>
 """
 
@@ -118,28 +134,27 @@ def render():
     universe = fm.equity_universe()
     names = universe["indexName"].tolist()
     display = dict(zip(universe["indexName"], universe["display"]))
-    funds = st.session_state.setdefault("dd_funds", [])      # [{"code", "name"}]
+    sel = st.session_state.setdefault(
+        "dd_sel", [{"kind": "index", "key": n} for n in DEFAULT_INDICES if n in names])
 
     with st.container(border=True):
-        c1, c2 = st.columns([5, 2.2], vertical_alignment="bottom")
-        with c1:
-            indices = st.multiselect(
-                "Indices", names, default=[n for n in DEFAULT_INDICES if n in names],
-                format_func=display.get, max_selections=MAX_SERIES,   # fixed: changing it would reset the box
-                key="dd_indices", placeholder="Add Nifty indices")
-        with c2:
+        st.markdown(f"<div class='dd-head'><b>Compare</b><span>{len(sel)} of {MAX_SERIES}"
+                    f"{' · that’s the most' if len(sel) >= MAX_SERIES else ''}</span></div>",
+                    unsafe_allow_html=True)
+        _picker(sel, names, display)
+        _chips(sel)
+        p1, p2 = st.columns([2.4, 3], vertical_alignment="bottom")
+        with p1:
             period = st.segmented_control("Period", list(PERIODS), default="Max",
                                           key="dd_period", width="stretch") or "Max"
-        if len(indices) + len(funds) > MAX_SERIES:
-            keep = MAX_SERIES - len(funds)
-            st.caption(f"Up to {MAX_SERIES} in total, so only the first {keep} indices are used. "
-                       "Remove a fund or an index to fit more.")
-            indices = indices[:keep]
-        _fund_picker(funds, room=MAX_SERIES - len(indices) - len(funds))
-        st.markdown(f"<p class='dd-count'>{len(indices) + len(funds)} of {MAX_SERIES} selected</p>",
-                    unsafe_allow_html=True)
+        with p2:
+            align = st.segmented_control(
+                "Start dates", ["Same for all", "Each from its own start"], default="Same for all",
+                key="dd_align", help="Same for all compares everything over the same years, starting "
+                "once every pick has data. Each from its own start shows every pick's full history.") \
+                or "Same for all"
 
-    levels, kinds, missing = _load(indices, funds)
+    levels, kinds, missing = _load(sel)
     for m in missing:
         st.caption(f"Couldn't load the NAV history for {m} just now; it's left out. Try again in a minute.")
     if levels is None:
@@ -150,16 +165,27 @@ def render():
     picks = list(levels.columns)
     as_of = levels.index.max()
     years = PERIODS[period]
-    window, start, shortened = fm.common_window(levels, years)
-    phrase = fm.period_phrase(years, start, shortened)
-    stats = {n: _stats(window[n], as_of) for n in picks}
-    colours = dict(zip(picks, fv.SERIES_COLORS))
+    own = align != "Same for all" and len(picks) > 1
+    if own:
+        start = (as_of - pd.DateOffset(years=years)) if years else levels.index.min()
+        window = levels.loc[start:].ffill()                 # leading gaps stay empty until each starts
+        shortened = False
+        phrase = fm.period_phrase(years, start, False) if years else "over each one's full history"
+    else:
+        window, start, shortened = fm.common_window(levels, years)
+        phrase = fm.period_phrase(years, start, shortened)
+    stats = {n: _stats(window[n], as_of) for n in picks if window[n].notna().sum() > 20}
+    picks = [n for n in picks if n in stats]
+    colours = {lab: fv.SERIES_COLORS[i] for i, lab in enumerate(_labels(sel)) if lab in picks}
 
     _headline(picks, stats, phrase)
     firsts = {n: levels[n].first_valid_index() for n in picks}
-    if len(picks) > 1 and len(set(firsts.values())) > 1 and (years is None or shortened):
+    if not own and len(picks) > 1 and len(set(firsts.values())) > 1 and (years is None or shortened):
         late = max(picks, key=firsts.get)
-        _note(f"All are shown since {start:%b %Y}, when {_label(late)} history begins.")
+        _note(f"All are shown since {start:%b %Y}, when {_label(late)} history begins. Switch "
+              f"<b>Start dates</b> to <b>Each from its own start</b> to see everything's full history.")
+    if years:
+        _note("Falls are measured from highs within this period.")
 
     if len(picks) <= 3:
         _cards(picks, stats, colours)
@@ -167,7 +193,7 @@ def render():
         _summary_table(picks, stats, colours, kinds)
 
     _lab("Fall from previous high")
-    many = len(picks) > 5
+    many = len(picks) > 3            # beyond three, line-end labels collide; use a colour key
     chart = fv.drawdown_chart(window, picks, "", end_labels=not many).to_dict()
     st.vega_lite_chart(chart, theme=None, width="stretch")
     if many:
@@ -190,57 +216,125 @@ def render():
     )
 
 
-def _fund_picker(funds, room):
-    """Search for a fund, add it; added funds are listed with a remove button."""
-    st.markdown("<p class='dd-funds-label'>Mutual funds</p>", unsafe_allow_html=True)
-    a, b, c = st.columns([2.2, 4.2, 1.2], vertical_alignment="bottom")
-    with a:
-        term = st.text_input("Search funds", key="dd_fund_q", placeholder="Search a fund",
-                             label_visibility="collapsed", disabled=room <= 0)
-    matches = search_funds(term) if term else []
-    have = {f["code"] for f in funds}
-    opts = {f"{m['name']}  ·  {m['code']}": m for m in matches if m["code"] not in have}
-    with b:
-        pick = st.selectbox("Fund", list(opts) or ["—"], key="dd_fund_pick",
-                            label_visibility="collapsed", disabled=not opts or room <= 0)
-    with c:
-        if st.button("Add", key="dd_fund_add", icon=":material/add:", width="stretch",
-                     disabled=not opts or room <= 0):
-            funds.append({"code": opts[pick]["code"], "name": opts[pick]["name"]})
-            st.rerun()
-    if term and len(term.strip()) >= 3 and not matches:
-        st.caption("No funds found. Try another name.")
-    if room <= 0:
-        st.caption(f"That's the maximum of {MAX_SERIES}. Remove one to add another.")
-    for i, f in enumerate(list(funds)):
-        x, y = st.columns([12, 1], vertical_alignment="center")
-        with x:
-            st.markdown(f"<span style='font-size:0.92rem'>{_fund_label(f['name'])}</span>"
-                        f"<span class='dd-tag'>FUND</span>", unsafe_allow_html=True)
-        with y:
-            if st.button("", key=f"dd_rm_{f['code']}", icon=":material/close:", help="Remove"):
-                funds.pop(i)
-                st.rerun()
+QUICK = ["NIFTY 50", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250", "NIFTY 500",
+         "NIFTY200 MOMENTUM 30", "NIFTY500 VALUE 50", "NIFTY100 LOW VOLATILITY 30"]
 
 
-def _load(indices, funds):
-    """One frame of levels, cut to the last date every series has."""
+def _add(item):
+    sel = st.session_state["dd_sel"]
+    if len(sel) < MAX_SERIES and all(x["key"] != item["key"] for x in sel):
+        sel.append(item)
+
+
+def _add_index():
+    key = st.session_state.get("dd_add_index")
+    if key:
+        _add({"kind": "index", "key": key})
+    st.session_state["dd_add_index"] = None                 # ready for the next one
+
+
+def _add_fund():
+    pick = st.session_state.get("dd_add_fund")
+    opts = st.session_state.get("_dd_fund_opts", {})
+    if pick in opts:
+        _add({"kind": "fund", "key": opts[pick]["code"], "name": opts[pick]["name"]})
+        st.session_state["dd_fund_q"] = ""                 # clear the search for the next fund
+    st.session_state["dd_add_fund"] = None
+
+
+def _picker(sel, names, display):
+    """One place to add either kind: choose Index or Mutual fund, pick, done."""
+    full = len(sel) >= MAX_SERIES
+    chosen = {x["key"] for x in sel}
+    k1, k2 = st.columns([1.35, 5], vertical_alignment="bottom")
+    with k1:
+        kind = st.segmented_control("Add", ["Index", "Mutual fund"], default="Index",
+                                    key="dd_add_kind", label_visibility="collapsed") or "Index"
+    with k2:
+        if kind == "Index":
+            st.selectbox("Index", [n for n in names if n not in chosen], index=None,
+                         format_func=display.get, key="dd_add_index", on_change=_add_index,
+                         placeholder="Type to find a Nifty index, then pick it to add",
+                         label_visibility="collapsed", disabled=full)
+        else:
+            f1, f2 = st.columns([1.3, 2.2], vertical_alignment="bottom")
+            with f1:
+                term = st.text_input("Fund", key="dd_fund_q", placeholder="Search a fund name",
+                                     label_visibility="collapsed", disabled=full)
+            matches = search_funds(term) if term else []
+            opts = {f"{_fund_label(m['name'])}  ·  {m['code']}": m for m in matches if m["code"] not in chosen}
+            st.session_state["_dd_fund_opts"] = opts
+            with f2:
+                st.selectbox("Plan", list(opts), index=None, key="dd_add_fund", on_change=_add_fund,
+                             placeholder=("Pick a plan to add" if opts else
+                                          "No funds found" if term and len(term.strip()) >= 3 else
+                                          "Results appear here"),
+                             label_visibility="collapsed", disabled=full or not opts)
+    if kind == "Index" and not full:
+        quick = [n for n in QUICK if n in names and n not in chosen][:6]
+        if quick:
+            with st.container(key="dd_quick", horizontal=True, gap="small"):
+                for n in quick:
+                    st.button(f"+ {display[n]}", key=f"dd_q_{n}", on_click=_add,
+                              args=({"kind": "index", "key": n},))
+
+
+def _remove(key):
+    st.session_state["dd_sel"] = [x for x in st.session_state["dd_sel"] if x["key"] != key]
+
+
+def _chips(sel):
+    if not sel:
+        st.markdown("<p class='dd-hint'>Nothing chosen yet. Add an index or a fund above.</p>",
+                    unsafe_allow_html=True)
+        return
+    css = "".join(f".st-key-dd_chip_{i} button {{--dot:{fv.SERIES_COLORS[i]};}}" for i in range(len(sel)))
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+    with st.container(key="dd_chips", horizontal=True, gap="small"):
+        for i, (x, lab) in enumerate(zip(sel, _labels(sel))):
+            st.button(_label(lab) + (" · fund" if x["kind"] == "fund" else ""), key=f"dd_chip_{i}",
+                      icon=":material/close:", icon_position="right",
+                      on_click=_remove, args=(x["key"],))
+
+
+def _labels(sel):
+    """Display label per selection, unique even if two plans share a short name."""
+    out = []
+    for x in sel:
+        # index keys stay in capitals (_label() gives them NSE's casing); funds get a short name
+        lab = x["key"] if x["kind"] == "index" else _fund_label(x["name"])
+        if lab in out:
+            lab = f"{lab} {x['key']}"
+        out.append(lab)
+    return out
+
+
+def _clean_nav(s):
+    """Drop one-day NAV glitches (a jump of 25%+ that fully reverses the next
+    day), which would otherwise show up as huge fake falls."""
+    s = s.dropna()
+    s = s[s > 0]
+    jump = s.pct_change().abs() > 0.25
+    back = (s.shift(-1) / s.shift(1) - 1).abs() < 0.05
+    return s[~(jump & back)]
+
+
+def _load(sel):
+    """One frame of levels in selection order, cut to the last date every series has."""
     cols, kinds, missing = {}, {}, []
-    if indices:
-        lv = fm.levels_to_as_of(indices)
-        for n in indices:
-            cols[n] = lv[n]
-            kinds[n] = "Index"
-    for f in funds:
-        df = fetch_fund_history(f["code"])
-        label = _fund_label(f["name"])
-        if label in cols:                                    # two plans with the same short name
-            label = f"{label} {f['code']}"
-        if df.empty:
-            missing.append(label)
-            continue
-        cols[label] = df.set_index("date")["nav"].astype(float)
-        kinds[label] = "Fund"
+    idx = [x["key"] for x in sel if x["kind"] == "index"]
+    lv = fm.levels_to_as_of(idx) if idx else None
+    for x, lab in zip(sel, _labels(sel)):
+        if x["kind"] == "index":
+            cols[lab] = lv[x["key"]]
+            kinds[lab] = "Index"
+        else:
+            df = fetch_fund_history(x["key"])
+            if df.empty:
+                missing.append(_fund_label(x["name"]))
+                continue
+            cols[lab] = _clean_nav(df.set_index("date")["nav"].astype(float))
+            kinds[lab] = "Fund"
     if not cols:
         return None, kinds, missing
     levels = pd.concat(cols, axis=1).sort_index()
