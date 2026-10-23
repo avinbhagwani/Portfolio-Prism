@@ -1,7 +1,7 @@
 """
 All external data access lives here: mfapi.in fund search/history and
-IndiaFactorLibrary factor data. Everything is cached with st.cache_data
-so the rest of the app never has to think about network calls.
+IndiaFactorLibrary factor data. Successful responses are cached with
+st.cache_data; failures are not, so a momentary outage clears on retry.
 """
 
 import requests
@@ -12,72 +12,79 @@ from indiafactorlibrary import IndiaFactorLibrary
 from core.config import get_model_config
 
 
+# Failures are never cached: each loader below raises inside the cached
+# function (st.cache_data doesn't store exceptions) and the public wrapper
+# turns the error into an empty result. Before, a single failed request was
+# cached as "no results" for an hour, so one blip from mfapi.in left fund
+# search showing "No funds found" until the cache expired.
+
 @st.cache_data(ttl=3600, show_spinner=False)
+def _search_funds(term):
+    response = requests.get(
+        "https://api.mfapi.in/mf/search",
+        params={"q": term},
+        timeout=15
+    )
+    response.raise_for_status()
+    return [
+        {"name": x["schemeName"], "code": str(x["schemeCode"])}
+        for x in response.json()
+    ]
+
+
 def search_funds(term):
     if not term or len(term.strip()) < 3:
         return []
-
     try:
-        response = requests.get(
-            "https://api.mfapi.in/mf/search",
-            params={"q": term.strip()},
-            timeout=15
-        )
-        response.raise_for_status()
-        matches = response.json()
-
-        return [
-            {
-                "name": x["schemeName"],
-                "code": str(x["schemeCode"])
-            }
-            for x in matches
-        ]
+        return _search_funds(term.strip())
     except Exception:
         return []
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_fund_history(scheme_code):
+    response = requests.get(
+        f"https://api.mfapi.in/mf/{scheme_code}",
+        timeout=30
+    )
+    response.raise_for_status()
+    df = pd.DataFrame(response.json().get("data", []))
+    if df.empty:
+        raise ValueError(f"No NAV history returned for {scheme_code}")
+    df["date"] = pd.to_datetime(df["date"], format="%d-%m-%Y", errors="coerce")
+    df["nav"] = pd.to_numeric(df["nav"], errors="coerce")
+    df = df.dropna(subset=["date", "nav"])
+    # mfapi occasionally repeats a date; keep one NAV per day
+    df = df[df["nav"] > 0].drop_duplicates("date", keep="last")
+    return df.sort_values("date").reset_index(drop=True)
+
+
 def fetch_fund_history(scheme_code):
     if not scheme_code:
         return pd.DataFrame()
-
     try:
-        response = requests.get(
-            f"https://api.mfapi.in/mf/{scheme_code}",
-            timeout=30
-        )
-        response.raise_for_status()
-        payload = response.json()
-
-        df = pd.DataFrame(payload.get("data", []))
-
-        if df.empty:
-            return pd.DataFrame()
-
-        df["date"] = pd.to_datetime(
-            df["date"],
-            format="%d-%m-%Y",
-            errors="coerce"
-        )
-        df["nav"] = pd.to_numeric(
-            df["nav"],
-            errors="coerce"
-        )
-
-        df = (
-            df.dropna(subset=["date", "nav"])
-              .sort_values("date")
-              .reset_index(drop=True)
-        )
-
-        return df
-
+        return _fetch_fund_history(scheme_code)
     except Exception:
         return pd.DataFrame()
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def _load_factor_data(model_key):
+    config = get_model_config(model_key)
+    data = IndiaFactorLibrary().read(config["dataset"])
+    factors = data[0].copy()
+    factors.index = pd.to_datetime(factors.index).to_period("M").to_timestamp("M")
+    # Normalise equity naming
+    if "SMB5" in factors.columns and "SMB" not in factors.columns:
+        factors.rename(columns={"SMB5": "SMB"}, inplace=True)
+    # Normalise fixed-income naming defensively
+    factors.rename(columns={
+        "TERM": "TERM_IN", "Term": "TERM_IN", "term": "TERM_IN",
+        "CREDIT": "CREDIT_IN", "Credit": "CREDIT_IN", "credit": "CREDIT_IN",
+    }, inplace=True)
+    return factors.sort_index()
+
+
 def load_factor_data(model_key):
     """
     Load factor data for either equity or fixed income models.
@@ -92,47 +99,16 @@ def load_factor_data(model_key):
     constructed for Indian fixed income markets.
     """
     try:
-        config = get_model_config(model_key)
-        ifl = IndiaFactorLibrary()
-
-        dataset = config["dataset"]
-        data = ifl.read(dataset)
-        factors = data[0].copy()
-
-        factors.index = pd.to_datetime(factors.index)
-        factors.index = (
-            factors.index
-            .to_period("M")
-            .to_timestamp("M")
-        )
-
-        # Normalise equity naming
-        if "SMB5" in factors.columns and "SMB" not in factors.columns:
-            factors.rename(columns={"SMB5": "SMB"}, inplace=True)
-
-        # Normalise fixed-income naming defensively
-        rename_map = {
-            "TERM": "TERM_IN",
-            "Term": "TERM_IN",
-            "term": "TERM_IN",
-            "CREDIT": "CREDIT_IN",
-            "Credit": "CREDIT_IN",
-            "credit": "CREDIT_IN",
-        }
-        factors.rename(columns=rename_map, inplace=True)
-
-        return factors.sort_index()
-
+        return _load_factor_data(model_key)
     except Exception as e:
-        st.error(f"Factor data error: {e}")
-
+        st.error(f"Couldn't load the factor data right now ({type(e).__name__}). "
+                 "Please try again in a minute.")
         if model_key == "fi2":
             st.info(
                 "The Fixed Income model requires IndiaFactorLibrary data symbol "
                 "'fi_factors'. Update indiafactorlibrary to the latest version "
                 "if this dataset is unavailable."
             )
-
         return pd.DataFrame()
 
 

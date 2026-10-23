@@ -13,7 +13,7 @@ Home: what PRISM is, in as few words as possible.
             efficient frontier)
   Writing   the latest Substack article
 
-The interactive prism is static/home-prism.html in a component iframe,
+The interactive prism is static/home-prism.html in an st.iframe,
 the one place JavaScript is allowed. Navigation stays in native
 st.page_link so moving to a tool keeps the session.
 """
@@ -22,7 +22,6 @@ import base64
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from core import substack as sb
 from core.config import MODEL_CONFIG
@@ -131,8 +130,7 @@ def render():
                     st.page_link(PAGES["fbi-intelligence"], label="Explore indices",
                                  icon=":material/query_stats:")
     with right:
-        components.html((STATIC / "home-prism.html").read_text(encoding="utf-8"),
-                        height=400)
+        st.iframe((STATIC / "home-prism.html").read_text(encoding="utf-8"), height=400)
 
     n_idx, years, n_models = _stats()
     st.markdown(

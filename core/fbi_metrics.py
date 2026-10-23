@@ -89,7 +89,9 @@ def as_of_date():
     history = load_index_history()
     last = history.index.max()
     month_start = last.replace(day=1)
-    is_month_end = (last + pd.Timedelta(days=1)).month != last.month
+    # complete if the data reaches the month's last business day (a month
+    # ending on a weekend used to be treated as unfinished and dropped)
+    is_month_end = (last.normalize() + pd.offsets.BDay(1)).month != last.month
     cutoff = last if is_month_end else month_start - pd.Timedelta(days=1)
     return history.index[history.index <= cutoff].max()
 
