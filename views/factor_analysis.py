@@ -21,6 +21,7 @@ from charts import factor_vega as fvc
 from charts import fbi_vega as fv
 from core.analysis import fit, rolling
 from core.config import FACTOR_LABELS, MODEL_CONFIG, get_model_config
+from core.regression_stats import significance_stars, significance_text
 from core.data import (
     fetch_fund_history,
     get_common_month_end_dates,
@@ -303,11 +304,12 @@ def _cards(res, model_key):
 def _exposures(res):
     m, factors = res["model"], res["factors"]
     rows = []
-    for f in factors:
+    for f in ["const"] + factors:          # alpha first, as in the original chart
         c, se, p = m.params[f], m.bse[f], m.pvalues[f]
         rows.append({"label": FACTOR_LABELS.get(f, f), "coef": c, "lo": c - 1.96 * se,
-                     "hi": c + 1.96 * se, "sig": p < 0.05})
-    st.markdown("<p class='fbi-label'>Exposure to each factor, with its 95% confidence range</p>",
+                     "hi": c + 1.96 * se, "sig": p < 0.05,
+                     "stars": significance_stars(p), "sig_text": significance_text(p)})
+    st.markdown("<p class='fbi-label'>Alpha (monthly %) and exposure to each factor, with 95% confidence ranges</p>",
                 unsafe_allow_html=True)
     st.vega_lite_chart(fvc.exposure_chart(rows).to_dict(), theme=None, width="stretch")
     st.markdown("<p class='fbi-note'>Coloured bars are statistically significant; grey ones could be "

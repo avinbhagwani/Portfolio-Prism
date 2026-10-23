@@ -2,8 +2,9 @@
 Interactive charts for Factor Analysis, in the FBI Intelligence house
 style (see charts/fbi_vega.py for the shared theme).
 
-  exposure_chart  one bar per factor with its 95% confidence range;
-                  significant exposures in colour, the rest grey
+  exposure_chart  vertical bars (alpha + each factor) with the value and
+                  significance above each and a 95% range whisker;
+                  significant terms in colour, the rest grey
   rolling_chart   small multiples of each exposure through time, with a
                   confidence band; points coloured when significant
 """
@@ -20,37 +21,47 @@ BAND = "#DDE6EF"
 
 
 def exposure_chart(rows):
-    """rows: list of dicts with label, coef, lo, hi, sig (bool)."""
+    """Vertical bars, one per term (alpha first), like the original PRISM
+    chart: the exposure printed above each bar with its significance, and
+    a whisker for the 95% confidence range.
+    rows: list of dicts with label, coef, lo, hi, sig (bool), stars, sig_text."""
     df = pd.DataFrame(rows)
     df["colour"] = [
         (SIG if c >= 0 else SIG_NEG) if s else NOT_SIG
         for c, s in zip(df["coef"], df["sig"])
     ]
-    df["text"] = df["coef"].map(lambda v: f"{v:+.2f}".replace("-", "−"))
+    df["value"] = df["coef"].map(lambda v: f"{v:.3f}".replace("-", "−"))
+    df["note"] = [f"{st}  {t}".strip() for st, t in zip(df["stars"], df["sig_text"])]
+    span = max(float(df["hi"].max()), 0.0) - min(float(df["lo"].min()), 0.0) or 1.0
+    pad = span * 0.06
+    # labels sit beyond the end of the whisker, on the bar's side of zero
+    df["y_val"] = [h + pad if c >= 0 else l - pad for c, h, l in zip(df["coef"], df["hi"], df["lo"])]
+    df["y_note"] = [h + pad * 2.6 if c >= 0 else l - pad * 2.6 for c, h, l in zip(df["coef"], df["hi"], df["lo"])]
+    lo = min(0.0, float(df["y_note"].min())) - pad
+    hi = max(0.0, float(df["y_note"].max())) + pad
     order = df["label"].tolist()
-    lo = min(0.0, float(df["lo"].min())) - 0.05
-    hi = max(0.0, float(df["hi"].max())) + 0.25
-    y = alt.Y("label:N", sort=order, title=None,
-              axis=alt.Axis(labelFontSize=13, labelColor=fv.INK, labelPadding=12))
-    x_scale = alt.Scale(domain=[lo, hi], nice=False)
-    base = alt.Chart(df).encode(y=y)
-    bars = base.mark_bar(height=22, cornerRadiusEnd=3).encode(
-        x=alt.X("coef:Q", title=None, scale=x_scale, axis=alt.Axis(format=".1f", tickCount=6, grid=True)),
-        x2=alt.datum(0),
+    x = alt.X("label:N", sort=order, title=None,
+              axis=alt.Axis(labelFontSize=13, labelColor=fv.INK, labelAngle=0, labelPadding=10))
+    y_scale = alt.Scale(domain=[lo, hi], nice=False)
+    base = alt.Chart(df).encode(x=x)
+    bars = base.mark_bar(size=46, cornerRadiusEnd=3).encode(
+        y=alt.Y("coef:Q", title="Coefficient", scale=y_scale, axis=alt.Axis(format=".1f", tickCount=6)),
+        y2=alt.datum(0),
         color=alt.Color("colour:N", scale=None),
-        tooltip=[alt.Tooltip("label:N", title="Factor"), alt.Tooltip("coef:Q", title="Exposure", format=".3f"),
+        tooltip=[alt.Tooltip("label:N", title="Term"), alt.Tooltip("coef:Q", title="Coefficient", format=".3f"),
                  alt.Tooltip("lo:Q", title="95% range from", format=".3f"),
-                 alt.Tooltip("hi:Q", title="to", format=".3f")],
+                 alt.Tooltip("hi:Q", title="to", format=".3f"), alt.Tooltip("note:N", title="Significance")],
     )
-    whiskers = base.mark_rule(color=fv.INK, strokeWidth=1.3, opacity=0.55).encode(
-        x=alt.X("lo:Q", scale=x_scale), x2="hi:Q")
-    caps_lo = base.mark_tick(color=fv.INK, thickness=1.3, size=10, opacity=0.55).encode(x=alt.X("lo:Q", scale=x_scale))
-    caps_hi = base.mark_tick(color=fv.INK, thickness=1.3, size=10, opacity=0.55).encode(x=alt.X("hi:Q", scale=x_scale))
-    labels = base.mark_text(align="left", dx=8, fontSize=12.5, fontWeight=600).encode(
-        x=alt.X("hi:Q", scale=x_scale), text="text:N", color=alt.Color("colour:N", scale=None))
-    zero = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=fv.ZERO, strokeWidth=1.2).encode(x="x:Q")
-    return alt.layer(zero, bars, whiskers, caps_lo, caps_hi, labels).properties(
-        width="container", height=max(150, 46 * len(df)))
+    whisker = base.mark_rule(color=fv.INK, strokeWidth=1.3, opacity=0.5).encode(
+        y=alt.Y("lo:Q", scale=y_scale), y2="hi:Q")
+    caps = [base.mark_tick(color=fv.INK, thickness=1.3, size=12, opacity=0.5, orient="horizontal").encode(
+        y=alt.Y(f"{k}:Q", scale=y_scale)) for k in ("lo", "hi")]
+    value = base.mark_text(fontSize=12.5, fontWeight=700, color=fv.INK).encode(
+        y=alt.Y("y_val:Q", scale=y_scale), text="value:N")
+    note = base.mark_text(fontSize=11, color=fv.MUTED).encode(
+        y=alt.Y("y_note:Q", scale=y_scale), text="note:N")
+    zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#8A939E", strokeDash=[4, 3]).encode(y="y:Q")
+    return alt.layer(zero, bars, whisker, *caps, value, note).properties(width="container", height=400)
 
 
 def rolling_chart(rdf, items, cols=2):
