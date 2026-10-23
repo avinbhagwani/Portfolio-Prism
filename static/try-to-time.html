@@ -204,22 +204,62 @@ button { font: inherit; cursor: pointer; }
 .foot { font-size: 11.5px; color: var(--muted); margin-top: 18px; line-height: 1.5; }
 
 
-/* ---------- how to play ---------- */
-#howto .card { padding: 36px 44px 32px 44px; }
-.ht-title { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 22px 0; }
-.ht-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 28px; margin-bottom: 26px; }
-.ht-step { display: grid; grid-template-columns: 34px 1fr; gap: 14px; align-items: start; opacity: 0; animation: rise .5s var(--ease) forwards; }
-.ht-step i { font-style: normal; width: 34px; height: 34px; border-radius: 50%; background: #EEF3F8; color: var(--navy);
-  display: grid; place-items: center; font-weight: 700; font-size: 15px; }
-.ht-step b { display: block; font-size: 15.5px; font-weight: 600; margin: 5px 0 3px 0; }
-.ht-step p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink2); }
-.ht-step p em { font-style: normal; font-weight: 600; color: var(--ink); }
-.ht-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 18px; border-top: 1px solid var(--line); }
-.ht-tip { font-size: 13px; color: var(--muted); margin-left: auto; }
-.linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font-size: 13.5px; font-weight: 500;
+
+/* ---------- how to play: a short interactive walkthrough ---------- */
+.ht { display: grid; grid-template-columns: 1.05fr 1fr; gap: 0; min-height: 360px; overflow: hidden; border-radius: 18px; }
+.ht-vis { position: relative; background: var(--tint, #EEF3F8); transition: background .5s ease; display: grid; place-items: center; padding: 18px; }
+.ht-vis svg { width: 100%; max-width: 380px; height: auto; display: block; }
+.ht-copy { padding: 34px 38px 26px 38px; display: flex; flex-direction: column; }
+.ht-count { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--accent, #1F4E79); }
+.ht-t { font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.12; margin: 10px 0 10px 0; }
+.ht-d { font-size: 15.5px; line-height: 1.6; color: var(--ink2); margin: 0; max-width: 30rem; }
+.ht-d b { color: var(--ink); font-weight: 600; }
+.ht-swap { animation: htin .45s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes htin { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.ht-dots { display: flex; gap: 7px; margin: auto 0 18px 0; padding-top: 22px; }
+.ht-dots button { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 99px; background: #D5DCE3; cursor: pointer;
+  transition: width .35s cubic-bezier(.2,.8,.2,1), background .3s ease; }
+.ht-dots button.on { width: 26px; background: var(--accent, #1F4E79); }
+.ht-nav { display: flex; align-items: center; gap: 10px; }
+.ht-nav .skip { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 13.5px; cursor: pointer; padding: 6px; }
+.ht-nav .skip:hover { color: var(--ink); }
+.ht-nav .btn[disabled] { visibility: hidden; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font-size: 13.5px; font-weight: 500; cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #C9D5E2; }
 .linkbtn:hover { text-decoration-color: var(--navy); }
-@media (max-width: 760px) { #howto .card { padding: 24px 18px; } .ht-tip { margin-left: 0; } }
+/* picture animations; they replay each time a slide is shown */
+.a-pop { animation: apop .5s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes apop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.a-grow { transform-box: fill-box; transform-origin: left center; animation: agrow 1s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes agrow { from { transform: scaleX(0); } }
+.a-rise { transform-box: fill-box; transform-origin: center bottom; animation: arise .8s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes arise { from { transform: scaleY(0); } }
+.a-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: adraw 1.5s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes adraw { to { stroke-dashoffset: 0; } }
+.a-fade { animation: afade .7s ease both; }
+@keyframes afade { from { opacity: 0; } }
+.a-pulse { transform-box: fill-box; transform-origin: center; animation: apulse 1.3s ease-in-out infinite; }
+@keyframes apulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+.a-ring { transform-box: fill-box; transform-origin: center; animation: aring 1.6s ease-out infinite; }
+@keyframes aring { from { transform: scale(.6); opacity: .8; } to { transform: scale(1.7); opacity: 0; } }
+.a-float { animation: afloat 1.6s ease both; }
+@keyframes afloat { 0% { opacity: 0; transform: translateY(6px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+.a-lift { transform-box: fill-box; animation: alift .45s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes alift { to { transform: translateY(-10px); } }
+.a-cursor { animation: acursor 1.1s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes acursor { from { transform: translate(70px, 60px); opacity: 0; } 30% { opacity: 1; } to { transform: none; } }
+.a-press { transform-box: fill-box; transform-origin: center; animation: apress .3s ease both; }
+@keyframes apress { 50% { transform: scale(.92); } }
+.a-scan { animation: ascan 3.2s ease-in-out infinite; }
+@keyframes ascan { 0%,12% { transform: translateY(0); } 30%,42% { transform: translateY(40px); } 60%,72% { transform: translateY(80px); } 90%,100% { transform: translateY(0); } }
+.a-slide { animation: aslide 2.4s ease-in-out infinite alternate; }
+@keyframes aslide { 0%,35% { transform: translateX(0); } 65%,100% { transform: translateX(var(--dx, 80px)); } }
+@media (max-width: 760px) {
+  .ht { grid-template-columns: 1fr; } .ht-vis { min-height: 200px; } .ht-copy { padding: 22px 18px 18px 18px; }
+  .ht-t { font-size: 23px; }
+}
+@media (prefers-reduced-motion: reduce) { .ht-vis * { animation-duration: .01s !important; animation-iteration-count: 1 !important; } }
+
 
 @media (max-width: 760px) {
   #start .card { grid-template-columns: 1fr; padding: 28px 22px; }
@@ -261,14 +301,20 @@ button { font: inherit; cursor: pointer; }
 
 <!-- HOW TO PLAY -->
 <section id="howto" class="screen">
-  <div class="card">
-    <div class="eyebrow">How to play</div>
-    <div class="ht-title">Try to time it, in five steps</div>
-    <div class="ht-steps" id="ht-steps"></div>
-    <div class="ht-foot">
-      <button class="btn" id="ht-go"></button>
-      <button class="btn ghost" id="ht-back">Back</button>
-      <span class="ht-tip">On a keyboard: <b>1</b>–<b>5</b> picks an index, <b>Enter</b> locks it in and moves on.</span>
+  <div class="card ht" id="ht">
+    <div class="ht-vis" id="ht-vis"></div>
+    <div class="ht-copy">
+      <div id="ht-copy">
+        <div class="ht-count" id="ht-count"></div>
+        <div class="ht-t" id="ht-t"></div>
+        <p class="ht-d" id="ht-d"></p>
+      </div>
+      <div class="ht-dots" id="ht-dots"></div>
+      <div class="ht-nav">
+        <button class="btn ghost" id="ht-prev">Back</button>
+        <button class="btn" id="ht-next">Next</button>
+        <button class="skip" id="ht-skip">Skip</button>
+      </div>
     </div>
   </div>
 </section>
@@ -777,36 +823,102 @@ const D = __DATA__;
   }
 
   // ---------- how to play ----------
-  const STEPS = [
-    ["It's the end of " + (D.firstRound - 1),
-     `Five Nifty 500 factor indices compete every year: <em>Momentum, Value, Quality, Low Vol and Growth</em>. You see how they did in ${YEARS[0]}–${D.firstRound - 1}, then the game starts.`],
-    ["Read the clues",
-     `Each year you see only what was known at the time: last year's return and rank, <em>3- and 5-year returns</em>, <em>risk</em> (how much it swings), its <em>worst fall</em>, and how often it has won. Click a column to sort by it.`],
-    ["Back one index",
-     `Click the index you think will win the coming year, then press <em>Lock it in</em>. Your money moves fully into it for that year.`],
-    ["Watch the year play out",
-     `The bars race to that year's real returns. You score <em>100 points</em> for picking the winner, 50 for second and 20 for third. Back-to-back winners add a streak bonus.`],
-    ["Beat the mix",
-     `The real opponent is the <em>equal mix</em>: 20% in each index at the start, never touched. At the end you'll see who won, and how you did against 10,000 random players.`],
+  const T = (x, y, s, w = 600, c = "#fff", extra = "") => `<text x="${x}" y="${y}" font-size="${s}" font-weight="${w}" fill="${c}" font-family="Inter, sans-serif" ${extra}>`;
+  const IDXC = [["Momentum", "#2F6FB0"], ["Value", "#C08A2E"], ["Quality", "#5E9A62"], ["Low Vol", "#2F8F9D"], ["Growth", "#8E5B9F"]];
+  const SLIDES = [
+    { tint: "#EEF3F8", accent: "#1F4E79", title: `It's the end of ${D.firstRound - 1}`,
+      text: `Five Nifty 500 factor indices are lined up: <b>Momentum, Value, Quality, Low Vol and Growth</b>. You get to see ${YEARS[0]}–${D.firstRound - 1} before you play.`,
+      svg: `<svg viewBox="0 0 320 220">
+        ${IDXC.map(([n, c], i) => `<g class="a-pop" style="animation-delay:${.08 + i * .1}s"><rect x="40" y="${24 + i * 36}" width="170" height="28" rx="8" fill="${c}"/>${T(54, 43 + i * 36, 13)}${n}</text></g>`).join("")}
+        <g class="a-pop" style="animation-delay:.7s"><rect x="232" y="56" width="62" height="66" rx="10" fill="#fff" stroke="#D5DCE3"/>
+          <rect x="232" y="56" width="62" height="18" rx="9" fill="#D23F4A"/><rect x="232" y="66" width="62" height="8" fill="#D23F4A"/>
+          ${T(263, 107, 17, 700, "#1B2533", 'text-anchor="middle"')}${D.firstRound - 1}</text></g>
+        <g class="a-pop" style="animation-delay:.95s">${T(263, 146, 11, 600, "#6B7480", 'text-anchor="middle"')}Your move next</text></g></svg>` },
+    { tint: "#FBF3E4", accent: "#9A6B1E", title: "Read the clues",
+      text: `Each year you only see what was known then: last year's return, <b>3- and 5-year returns</b>, <b>risk</b>, the <b>worst fall</b> and how often each has won. Click a column to sort.`,
+      svg: `<svg viewBox="0 0 320 220">
+        <rect x="24" y="22" width="272" height="176" rx="14" fill="#fff"/>
+        ${IDXC.slice(0, 4).map(([n, c], i) => `<g class="a-pop" style="animation-delay:${.05 + i * .08}s">
+          <circle cx="48" cy="${54 + i * 40}" r="7" fill="${c}"/><rect x="62" y="${49 + i * 40}" width="54" height="10" rx="5" fill="#E7EBF0"/>
+          <rect class="a-grow" style="animation-delay:${.4 + i * .1}s" x="130" y="${49 + i * 40}" width="${[70, 46, 88, 58][i]}" height="10" rx="5" fill="${c}" opacity=".75"/>
+          <rect class="a-grow" style="animation-delay:${.55 + i * .1}s" x="228" y="${49 + i * 40}" width="${[38, 52, 30, 44][i]}" height="10" rx="5" fill="#C9D2DC"/></g>`).join("")}
+        <g class="a-scan"><rect x="30" y="38" width="260" height="32" rx="9" fill="none" stroke="#C08A2E" stroke-width="2.5"/></g>
+        <g class="a-pop" style="animation-delay:1s">${T(130, 40, 9.5, 600, "#8A939E")}RETURN</text>${T(228, 40, 9.5, 600, "#8A939E")}RISK</text></g></svg>` },
+    { tint: "#EEF6F0", accent: "#2E7D4F", title: "Back one index",
+      text: `Click the one you think will <b>win the coming year</b>, then press <b>Lock it in</b>. Your money moves fully into it for that year.`,
+      svg: `<svg viewBox="0 0 320 220">
+        ${IDXC.map(([n, c], i) => `<g class="${i === 2 ? "a-lift" : ""}" style="animation-delay:1.05s"><g class="a-pop" style="animation-delay:${.05 + i * .07}s">
+          <rect x="${22 + i * 57}" y="58" width="48" height="66" rx="10" fill="${c}" ${i === 2 ? "" : 'opacity=".55"'}/>
+          ${T(46 + i * 57, 97, 15, 700, "#fff", 'text-anchor="middle"')}${i + 1}</text></g></g>`).join("")}
+        <rect class="a-fade" style="animation-delay:1.1s" x="133" y="44" width="54" height="76" rx="12" fill="none" stroke="#2E7D4F" stroke-width="2.5"/>
+        <g class="a-pop" style="animation-delay:1.45s"><g class="a-press" style="animation-delay:1.9s"><rect x="100" y="150" width="120" height="36" rx="18" fill="#1F4E79"/>
+          ${T(160, 173, 13, 600, "#fff", 'text-anchor="middle"')}Lock it in</text></g></g>
+        <g class="a-cursor" style="animation-delay:.3s"><path d="M168 108 l0 26 l7 -6 l5 11 l5 -2 l-5 -11 l9 0 z" fill="#1B2533" stroke="#fff" stroke-width="1.5"/></g></svg>` },
+    { tint: "#F3EEF7", accent: "#7A4A8C", title: "Watch the year play out",
+      text: `The bars race to that year's real returns. <b>100 points</b> for the winner, 50 for second, 20 for third, plus a bonus for back-to-back winners.`,
+      svg: `<svg viewBox="0 0 320 220">
+        <line x1="70" y1="26" x2="70" y2="196" stroke="#CBD3DC"/>
+        ${[[2, 210], [0, 150], [4, 120], [1, 84], [3, 52]].map(([k, w], i) => `<g class="a-pop" style="animation-delay:${i * .05}s">
+          <circle cx="50" cy="${40 + i * 36}" r="8" fill="${IDXC[k][1]}"/>
+          <rect class="a-grow" style="animation-delay:${.2 + i * .08}s" x="70" y="${30 + i * 36}" width="${w}" height="20" rx="6" fill="${IDXC[k][1]}"/></g>`).join("")}
+        <g class="a-pop" style="animation-delay:1.3s"><circle cx="50" cy="40" r="13" fill="none" stroke="#C9A25A" stroke-width="2.5"/></g>
+        <g class="a-float" style="animation-delay:1.45s; animation-iteration-count: infinite">${T(286, 46, 16, 800, "#2E7D4F", 'text-anchor="end"')}+100</text></g></svg>` },
+    { tint: "#FCEFEF", accent: "#B4483C", title: "Beat the mix",
+      text: `Your real opponent is the <b>equal mix</b>: 20% in each index at the start, never touched. At the end you'll see who won, and how you did against <b>10,000 random players</b>.`,
+      svg: `<svg viewBox="0 0 320 220">
+        <line x1="28" y1="186" x2="292" y2="186" stroke="#E7EBF0"/>
+        <path class="a-draw" pathLength="1" d="M28 170 C70 160 90 120 120 128 S170 80 200 96 S250 52 284 50" fill="none" stroke="#C9A25A" stroke-width="3" stroke-linecap="round"/>
+        <path class="a-draw" style="animation-delay:.25s" pathLength="1" d="M28 170 C60 176 80 110 110 140 S150 60 180 112 S240 40 284 70" fill="none" stroke="#1F4E79" stroke-width="3" stroke-linecap="round"/>
+        <g class="a-pop" style="animation-delay:1.6s">${T(288, 47, 12, 700, "#9A6B1E", 'text-anchor="end"')}Equal mix</text>${T(288, 88, 12, 700, "#1F4E79", 'text-anchor="end"')}You</text></g>
+        <g class="a-pop" style="animation-delay:1.8s"><line x1="300" y1="30" x2="300" y2="186" stroke="#1B2533" stroke-width="2"/>
+          <path d="M300 30 h16 v10 h-16" fill="#1B2533"/></g></svg>` },
   ];
-  $("ht-steps").innerHTML = STEPS.map(([t, d], i) =>
-    `<div class="ht-step" style="animation-delay:${80 + i * 70}ms"><i>${i + 1}</i><div><b>${t}</b><p>${d}</p></div></div>`).join("");
-  let ht = { mode: "full", from: "start" };
-  function openHowto(mode, from) {
-    ht = { mode, from };
-    $("ht-go").innerHTML = from === "game" ? "Back to the game"
-      : `Start the ${mode === "quick" ? "quick run" : "full run"} · ${MODES[mode].n} years <span class="kbd">Enter</span>`;
-    $("ht-back").style.display = from === "game" ? "none" : "";
-    show("howto");
+
+  // slideshow engine
+  const HT = { i: 0, finish: null, finishLabel: "Start", from: "start" };
+  function htGo(i, dir) {
+    HT.i = Math.max(0, Math.min(SLIDES.length - 1, i));
+    const s = SLIDES[HT.i], ht = $("ht");
+    ht.style.setProperty("--tint", s.tint); ht.style.setProperty("--accent", s.accent);
+    $("ht-vis").innerHTML = s.svg;                         // re-inserting replays the animations
+    $("ht-count").textContent = `Step ${HT.i + 1} of ${SLIDES.length}`;
+    $("ht-t").textContent = s.title; $("ht-d").innerHTML = s.text;
+    const c = $("ht-copy"); c.classList.remove("ht-swap"); void c.offsetWidth; c.classList.add("ht-swap");
+    c.style.animationDirection = dir < 0 ? "reverse" : "normal";
+    $("ht-dots").innerHTML = SLIDES.map((_, k) => `<button class="${k === HT.i ? "on" : ""}" data-k="${k}" aria-label="Step ${k + 1}"></button>`).join("");
+    $("ht-dots").querySelectorAll("button").forEach(b => b.addEventListener("click", () => htGo(+b.dataset.k, +b.dataset.k - HT.i)));
+    $("ht-prev").disabled = HT.i === 0;
+    const last = HT.i === SLIDES.length - 1;
+    $("ht-next").innerHTML = last ? `${HT.finishLabel} <span class="kbd">Enter</span>` : "Next →";
+    $("ht-skip").style.visibility = last ? "hidden" : "visible";
   }
-  function begin(mode) {                     // first time: explain before playing
+  $("ht-prev").addEventListener("click", () => htGo(HT.i - 1, -1));
+  $("ht-next").addEventListener("click", () => HT.i === SLIDES.length - 1 ? HT.finish() : htGo(HT.i + 1, 1));
+  $("ht-skip").addEventListener("click", () => HT.finish());
+  // swipe on touch screens
+  let htX = null;
+  $("ht").addEventListener("pointerdown", e => { htX = e.clientX; });
+  $("ht").addEventListener("pointerup", e => { if (htX == null) return; const dx = e.clientX - htX; htX = null;
+    if (Math.abs(dx) > 50) htGo(HT.i + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); });
+  function htKeys(e) {
+    if (e.key === "ArrowRight" || e.key === "Enter") { e.preventDefault(); $("ht-next").click(); }
+    else if (e.key === "ArrowLeft") htGo(HT.i - 1, -1);
+    else if (e.key === "Escape") HT.finish();
+  }
+
+  let htMode = "full";
+  function openHowto(mode, from) {
+    htMode = mode; HT.from = from;
+    HT.finishLabel = from === "game" ? "Back to the game" : `Start the ${mode === "quick" ? "quick run" : "full run"}`;
+    show("howto"); htGo(0, 1);
+  }
+  HT.finish = () => {
+    store.set("prism-ttt-howto", "1");
+    if (HT.from === "game") show("game"); else newGame(htMode);
+  };
+  function begin(mode) {                     // first time: walk through it before playing
     if (store.get("prism-ttt-howto")) newGame(mode); else openHowto(mode, "start");
   }
-  $("ht-go").addEventListener("click", () => {
-    store.set("prism-ttt-howto", "1");
-    if (ht.from === "game") show("game"); else newGame(ht.mode);
-  });
-  $("ht-back").addEventListener("click", () => show(ht.from === "game" ? "game" : "start"));
   $("show-howto").addEventListener("click", () => openHowto("full", "start"));
   $("help").addEventListener("click", () => openHowto(S ? S.mode : "full", "game"));
 
@@ -818,7 +930,7 @@ const D = __DATA__;
   document.addEventListener("keydown", e => {
     const on = id => $(id).classList.contains("on");
     if (on("start")) { if (e.key === "f" || e.key === "F") begin("full"); if (e.key === "q" || e.key === "Q") begin("quick"); return; }
-    if (on("howto")) { if (e.key === "Enter") $("ht-go").click(); if (e.key === "Escape") $("ht-back").click(); return; }
+    if (on("howto")) { htKeys(e); return; }
     if (on("end")) { if (e.key === "Enter") newGame(S.mode); return; }
     if (/^[1-5]$/.test(e.key)) choose(KEYS[+e.key - 1]);
     if (e.key === "Enter") { if (!S.revealed) reveal(); else if ($("next")) next(); }

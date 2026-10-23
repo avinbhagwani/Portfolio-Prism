@@ -145,26 +145,65 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .foot { font-size: 11.5px; color: var(--muted); margin-top: 18px; line-height: 1.5; }
 
 
-/* ---------- how to play ---------- */
-.ht-title { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 22px 0; }
-.ht-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 28px; margin-bottom: 26px; }
-.ht-step { display: grid; grid-template-columns: 34px 1fr; gap: 14px; align-items: start; opacity: 0; animation: rise .5s var(--ease) forwards; }
-.ht-step i { font-style: normal; width: 34px; height: 34px; border-radius: 50%; background: #EEF3F8; color: var(--navy);
-  display: grid; place-items: center; font-weight: 700; font-size: 15px; }
-.ht-step.red i { background: #FBECEC; color: var(--red); }
-.ht-step b { display: block; font-size: 15.5px; font-weight: 600; margin: 5px 0 3px 0; }
-.ht-step p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink2); }
-.ht-step p em { font-style: normal; font-weight: 600; color: var(--ink); }
-.ht-step p .r { color: var(--red); font-weight: 600; }
-.ht-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 18px; border-top: 1px solid var(--line); }
-.ht-tip { font-size: 13px; color: var(--muted); margin-left: auto; }
-.linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font-size: 13.5px; font-weight: 500;
+
+/* ---------- how to play: a short interactive walkthrough ---------- */
+#howto.screen { padding: 0; }
+.ht { display: grid; grid-template-columns: 1.05fr 1fr; gap: 0; min-height: 360px; overflow: hidden; border-radius: 18px; }
+.ht-vis { position: relative; background: var(--tint, #EEF3F8); transition: background .5s ease; display: grid; place-items: center; padding: 18px; }
+.ht-vis svg { width: 100%; max-width: 380px; height: auto; display: block; }
+.ht-copy { padding: 34px 38px 26px 38px; display: flex; flex-direction: column; }
+.ht-count { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--accent, #1F4E79); }
+.ht-t { font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.12; margin: 10px 0 10px 0; }
+.ht-d { font-size: 15.5px; line-height: 1.6; color: var(--ink2); margin: 0; max-width: 30rem; }
+.ht-d b { color: var(--ink); font-weight: 600; }
+.ht-swap { animation: htin .45s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes htin { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.ht-dots { display: flex; gap: 7px; margin: auto 0 18px 0; padding-top: 22px; }
+.ht-dots button { width: 9px; height: 9px; padding: 0; border: 0; border-radius: 99px; background: #D5DCE3; cursor: pointer;
+  transition: width .35s cubic-bezier(.2,.8,.2,1), background .3s ease; }
+.ht-dots button.on { width: 26px; background: var(--accent, #1F4E79); }
+.ht-nav { display: flex; align-items: center; gap: 10px; }
+.ht-nav .skip { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 13.5px; cursor: pointer; padding: 6px; }
+.ht-nav .skip:hover { color: var(--ink); }
+.ht-nav .btn[disabled] { visibility: hidden; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font-size: 13.5px; font-weight: 500; cursor: pointer;
   text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #C9D5E2; }
 .linkbtn:hover { text-decoration-color: var(--navy); }
+/* picture animations; they replay each time a slide is shown */
+.a-pop { animation: apop .5s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes apop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.a-grow { transform-box: fill-box; transform-origin: left center; animation: agrow 1s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes agrow { from { transform: scaleX(0); } }
+.a-rise { transform-box: fill-box; transform-origin: center bottom; animation: arise .8s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes arise { from { transform: scaleY(0); } }
+.a-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: adraw 1.5s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes adraw { to { stroke-dashoffset: 0; } }
+.a-fade { animation: afade .7s ease both; }
+@keyframes afade { from { opacity: 0; } }
+.a-pulse { transform-box: fill-box; transform-origin: center; animation: apulse 1.3s ease-in-out infinite; }
+@keyframes apulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+.a-ring { transform-box: fill-box; transform-origin: center; animation: aring 1.6s ease-out infinite; }
+@keyframes aring { from { transform: scale(.6); opacity: .8; } to { transform: scale(1.7); opacity: 0; } }
+.a-float { animation: afloat 1.6s ease both; }
+@keyframes afloat { 0% { opacity: 0; transform: translateY(6px); } 25% { opacity: 1; } 100% { opacity: 0; transform: translateY(-22px); } }
+.a-lift { transform-box: fill-box; animation: alift .45s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes alift { to { transform: translateY(-10px); } }
+.a-cursor { animation: acursor 1.1s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes acursor { from { transform: translate(70px, 60px); opacity: 0; } 30% { opacity: 1; } to { transform: none; } }
+.a-press { transform-box: fill-box; transform-origin: center; animation: apress .3s ease both; }
+@keyframes apress { 50% { transform: scale(.92); } }
+.a-scan { animation: ascan 3.2s ease-in-out infinite; }
+@keyframes ascan { 0%,12% { transform: translateY(0); } 30%,42% { transform: translateY(40px); } 60%,72% { transform: translateY(80px); } 90%,100% { transform: translateY(0); } }
+.a-slide { animation: aslide 2.4s ease-in-out infinite alternate; }
+@keyframes aslide { 0%,35% { transform: translateX(0); } 65%,100% { transform: translateX(var(--dx, 80px)); } }
+@media (max-width: 760px) {
+  .ht { grid-template-columns: 1fr; } .ht-vis { min-height: 200px; } .ht-copy { padding: 22px 18px 18px 18px; }
+  .ht-t { font-size: 23px; }
+}
+@media (prefers-reduced-motion: reduce) { .ht-vis * { animation-duration: .01s !important; animation-iteration-count: 1 !important; } }
 
 @media (max-width: 760px) {
   .screen { padding: 20px 16px; }
-  .ht-tip { margin-left: 0; }
   .s-grid { grid-template-columns: 1fr; } .mystery { height: 160px; }
   .s-title { font-size: 34px; } .e-h { font-size: 28px; }
   .nums { grid-template-columns: 1fr 1fr; } .n.hero { grid-column: 1 / -1; }
@@ -199,14 +238,22 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 </section>
 
 <!-- HOW TO PLAY -->
-<section class="screen" id="howto">
-  <div class="eyebrow">How to play</div>
-  <div class="ht-title">Can you handle it? Five steps</div>
-  <div class="ht-steps" id="ht-steps"></div>
-  <div class="ht-foot">
-    <button class="btn" id="ht-go"></button>
-    <button class="btn ghost" id="ht-back">Back</button>
-    <span class="ht-tip">On a keyboard: <b>Space</b> pauses, <b>S</b> sells.</span>
+<section id="howto" class="screen">
+  <div class=" ht" id="ht">
+    <div class="ht-vis" id="ht-vis"></div>
+    <div class="ht-copy">
+      <div id="ht-copy">
+        <div class="ht-count" id="ht-count"></div>
+        <div class="ht-t" id="ht-t"></div>
+        <p class="ht-d" id="ht-d"></p>
+      </div>
+      <div class="ht-dots" id="ht-dots"></div>
+      <div class="ht-nav">
+        <button class="btn ghost" id="ht-prev">Back</button>
+        <button class="btn" id="ht-next">Next</button>
+        <button class="skip" id="ht-skip">Skip</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -673,37 +720,106 @@ const D = __DATA__;
   window.__handleIt = { simulate, xirr, yearly, cfg, worst: () => worst };
 
   // ---------- how to play ----------
-  const STEPS = [
-    ["", "Choose what to invest in",
-     `Pick an index or a mutual fund in the box above the game, then choose a <em>lump sum</em> or a <em>monthly SIP</em> and an amount.`],
-    ["", "We invest at the worst moment",
-     `Your money goes in at the very top, right before the deepest fall in that index's or fund's history. <em>You won't know which fall it is</em>: dates stay hidden until the end.`],
-    ["", "Live through it, month by month",
-     `Watch your money, your return, XIRR (shown after a year), how far you are behind or ahead of <em>cash</em>, and how long you've been underwater. <span class="r">Red</span> means you're below what you put in. Pause, speed up or skip whenever you like.`],
-    ["red", "Sell if you can't handle it",
-     `The <span class="r">Sell</span> button is always there. If you press it, your money is locked in, and the game carries on to show what would have happened if you'd stayed.`],
-    ["", "See what patience was worth",
-     `At the end you find out the real period, the crises you lived through, and what holding on, selling and keeping it in cash would each have given you.`],
+  const T = (x, y, s, w = 600, c = "#fff", extra = "") => `<text x="${x}" y="${y}" font-size="${s}" font-weight="${w}" fill="${c}" font-family="Inter, sans-serif" ${extra}>`;
+  const SLIDES = [
+    { tint: "#EEF3F8", accent: "#1F4E79", title: "Choose what to invest in",
+      text: `Pick an <b>index or a mutual fund</b> in the box above, then a <b>lump sum</b> or a <b>monthly SIP</b> and how much.`,
+      svg: `<svg viewBox="0 0 320 220">
+        <g class="a-pop"><rect x="40" y="40" width="240" height="40" rx="20" fill="#fff" stroke="#E7EBF0"/>
+          <g class="a-slide" style="--dx:118px"><rect x="44" y="44" width="114" height="32" rx="16" fill="#1F4E79" opacity=".14"/></g>
+          ${T(101, 65, 13, 600, "#1B2533", 'text-anchor="middle"')}Index</text>${T(219, 65, 13, 600, "#1B2533", 'text-anchor="middle"')}Mutual fund</text></g>
+        <g class="a-pop" style="animation-delay:.25s"><rect x="40" y="100" width="240" height="40" rx="20" fill="#fff" stroke="#E7EBF0"/>
+          <g class="a-slide" style="--dx:118px; animation-delay:.6s"><rect x="44" y="104" width="114" height="32" rx="16" fill="#C08A2E" opacity=".2"/></g>
+          ${T(101, 125, 13, 600, "#1B2533", 'text-anchor="middle"')}Lump sum</text>${T(219, 125, 13, 600, "#1B2533", 'text-anchor="middle"')}Monthly SIP</text></g>
+        ${["₹1 L", "₹5 L", "₹10 L", "₹25 L"].map((a, i) => `<g class="a-pop" style="animation-delay:${.5 + i * .08}s"><rect x="${40 + i * 62}" y="160" width="54" height="30" rx="9" fill="${i === 2 ? "#F2F6FA" : "#fff"}" stroke="${i === 2 ? "#1F4E79" : "#E7EBF0"}"/>
+          ${T(67 + i * 62, 180, 12, 600, i === 2 ? "#1F4E79" : "#4A5562", 'text-anchor="middle"')}${a}</text></g>`).join("")}</svg>` },
+    { tint: "#FBF3E4", accent: "#9A6B1E", title: "We invest at the worst moment",
+      text: `Your money goes in at the very top, right before the <b>deepest fall</b> in its history. You won't know which fall it is: <b>dates stay hidden</b> until the end.`,
+      svg: `<svg viewBox="0 0 320 220">
+        <defs><linearGradient id="fog" x1="0" x2="1"><stop offset="0" stop-color="#FBF3E4" stop-opacity="0"/><stop offset=".35" stop-color="#FBF3E4"/></linearGradient></defs>
+        <path class="a-draw" pathLength="1" d="M24 180 C60 170 80 140 110 130 S150 80 170 62" fill="none" stroke="#1F4E79" stroke-width="3" stroke-linecap="round"/>
+        <circle class="a-ring" style="animation-delay:1.3s" cx="170" cy="62" r="10" fill="none" stroke="#C08A2E" stroke-width="2"/>
+        <circle class="a-pop" style="animation-delay:1.3s" cx="170" cy="62" r="6" fill="#C08A2E"/>
+        <g class="a-pop" style="animation-delay:1.5s"><rect x="104" y="20" width="132" height="24" rx="12" fill="#fff"/>${T(170, 36, 11.5, 600, "#9A6B1E", 'text-anchor="middle"')}You invest here</text></g>
+        <rect x="180" y="10" width="140" height="200" fill="url(#fog)"/>
+        <g class="a-pop" style="animation-delay:1.8s">${T(262, 130, 44, 800, "#E3D2B0", 'text-anchor="middle"')}?</text></g></svg>` },
+    { tint: "#FCEDEE", accent: "#D23F4A", title: "Live through it, month by month",
+      text: `Watch your money, return, XIRR, how far you are from <b>cash</b>, and how long you've been underwater. <b style="color:#D23F4A">Red</b> means you're below what you put in.`,
+      svg: `<svg viewBox="0 0 320 220">
+        <line x1="24" y1="60" x2="296" y2="60" stroke="#9AA6B2" stroke-dasharray="5 4"/>
+        <path class="a-fade" style="animation-delay:.9s" d="M24 60 C60 70 80 120 110 150 S160 182 190 160 S240 120 260 112 L260 60 Z" fill="#D23F4A" opacity=".18"/>
+        <path class="a-draw" pathLength="1" d="M24 60 C60 70 80 120 110 150 S160 182 190 160 S240 120 260 112" fill="none" stroke="#1F4E79" stroke-width="3" stroke-linecap="round"/>
+        <g class="a-pop" style="animation-delay:1.2s"><rect x="196" y="22" width="100" height="30" rx="10" fill="#fff"/>${T(246, 42, 15, 800, "#D23F4A", 'text-anchor="middle"')}−42%</text></g>
+        <g transform="translate(40 172)"><path class="a-pulse" d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2 0 3.6 1.1 4.4 2.6h1.8c.8-1.5 2.4-2.6 4.4-2.6 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z" fill="#D23F4A" transform="translate(-12 -14)"/></g>
+        <g class="a-pop" style="animation-delay:.4s">${T(64, 182, 12, 600, "#4A5562")}148 bpm</text></g></svg>` },
+    { tint: "#FCEDEE", accent: "#D23F4A", title: "Sell, if you can't handle it",
+      text: `The <b style="color:#D23F4A">Sell</b> button is always there. Press it and your money is locked in, and the game carries on to show you <b>what happened next</b>.`,
+      svg: `<svg viewBox="0 0 320 220">
+        <path d="M24 70 C60 80 80 130 110 150" fill="none" stroke="#1F4E79" stroke-width="3" stroke-linecap="round"/>
+        <line class="a-fade" style="animation-delay:1.2s" x1="110" y1="150" x2="290" y2="150" stroke="#1F4E79" stroke-width="3"/>
+        <path class="a-draw" style="animation-delay:1.3s" pathLength="1" d="M110 150 C150 168 170 120 200 110 S260 60 290 40" fill="none" stroke="#2E8B57" stroke-width="2.5" stroke-dasharray="6 5" stroke-linecap="round"/>
+        <circle cx="110" cy="150" r="5.5" fill="#D23F4A"/>
+        <g class="a-pop" style="animation-delay:2.4s">${T(286, 34, 11, 600, "#2E8B57", 'text-anchor="end"')}what you'd have missed</text></g>
+        <g><circle class="a-ring" cx="96" cy="196" r="20" fill="none" stroke="#D23F4A" stroke-width="2"/>
+          <g class="a-press" style="animation-delay:.9s"><rect x="46" y="180" width="100" height="32" rx="16" fill="#D23F4A"/>${T(96, 201, 13, 700, "#fff", 'text-anchor="middle"')}Sell</text></g></g>
+        <g class="a-cursor" style="animation-delay:.1s"><path d="M118 196 l0 22 l6 -5 l4 9 l4 -2 l-4 -9 l8 0 z" fill="#1B2533" stroke="#fff" stroke-width="1.5"/></g></svg>` },
+    { tint: "#EEF6F0", accent: "#2E7D4F", title: "See what patience was worth",
+      text: `At the end you find out the <b>real period</b>, the crises you lived through, and what holding on, selling and keeping it in cash would each have given you.`,
+      svg: `<svg viewBox="0 0 320 220">
+        ${[["Held on", 230, "#1F4E79"], ["Cash", 140, "#C08A2E"], ["Sold", 70, "#D23F4A"]].map(([n, w, c], i) => `<g class="a-pop" style="animation-delay:${i * .08}s">${T(30, 44 + i * 44, 12, 600, "#4A5562")}${n}</text>
+          <rect class="a-grow" style="animation-delay:${.25 + i * .12}s" x="30" y="${51 + i * 44}" width="${w}" height="14" rx="7" fill="${c}"/></g>`).join("")}
+        ${["GFC", "Covid", "2022"].map((n, i) => `<g class="a-pop" style="animation-delay:${1.1 + i * .15}s"><rect x="${30 + i * 86}" y="174" width="78" height="26" rx="13" fill="#fff"/>
+          <path d="M${42 + i * 86} 187 l4 4 l8 -8" fill="none" stroke="#2E7D4F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          ${T(60 + i * 86, 191, 11.5, 600, "#1F4E79")}${n}</text></g>`).join("")}</svg>` },
   ];
-  $("ht-steps").innerHTML = STEPS.map(([cls, t, d], i) =>
-    `<div class="ht-step ${cls}" style="animation-delay:${80 + i * 70}ms"><i>${i + 1}</i><div><b>${t}</b><p>${d}</p></div></div>`).join("");
-  let htFrom = "setup", wasPaused = false;
-  function openHowto(from) {
-    htFrom = from;
-    if (from === "play" && G) { wasPaused = G.paused; setPause(true); }
-    $("ht-go").innerHTML = from === "play" ? "Back to the game" : `Invest and start <span class="kbd">Enter</span>`;
-    $("ht-back").style.display = from === "play" ? "none" : "";
-    show("howto");
+
+  // slideshow engine
+  const HT = { i: 0, finish: null, finishLabel: "Start", from: "start" };
+  function htGo(i, dir) {
+    HT.i = Math.max(0, Math.min(SLIDES.length - 1, i));
+    const s = SLIDES[HT.i], ht = $("ht");
+    ht.style.setProperty("--tint", s.tint); ht.style.setProperty("--accent", s.accent);
+    $("ht-vis").innerHTML = s.svg;                         // re-inserting replays the animations
+    $("ht-count").textContent = `Step ${HT.i + 1} of ${SLIDES.length}`;
+    $("ht-t").textContent = s.title; $("ht-d").innerHTML = s.text;
+    const c = $("ht-copy"); c.classList.remove("ht-swap"); void c.offsetWidth; c.classList.add("ht-swap");
+    c.style.animationDirection = dir < 0 ? "reverse" : "normal";
+    $("ht-dots").innerHTML = SLIDES.map((_, k) => `<button class="${k === HT.i ? "on" : ""}" data-k="${k}" aria-label="Step ${k + 1}"></button>`).join("");
+    $("ht-dots").querySelectorAll("button").forEach(b => b.addEventListener("click", () => htGo(+b.dataset.k, +b.dataset.k - HT.i)));
+    $("ht-prev").disabled = HT.i === 0;
+    const last = HT.i === SLIDES.length - 1;
+    $("ht-next").innerHTML = last ? `${HT.finishLabel} <span class="kbd">Enter</span>` : "Next →";
+    $("ht-skip").style.visibility = last ? "hidden" : "visible";
   }
-  function begin() {                         // first time: explain before playing
+  $("ht-prev").addEventListener("click", () => htGo(HT.i - 1, -1));
+  $("ht-next").addEventListener("click", () => HT.i === SLIDES.length - 1 ? HT.finish() : htGo(HT.i + 1, 1));
+  $("ht-skip").addEventListener("click", () => HT.finish());
+  // swipe on touch screens
+  let htX = null;
+  $("ht").addEventListener("pointerdown", e => { htX = e.clientX; });
+  $("ht").addEventListener("pointerup", e => { if (htX == null) return; const dx = e.clientX - htX; htX = null;
+    if (Math.abs(dx) > 50) htGo(HT.i + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); });
+  function htKeys(e) {
+    if (e.key === "ArrowRight" || e.key === "Enter") { e.preventDefault(); $("ht-next").click(); }
+    else if (e.key === "ArrowLeft") htGo(HT.i - 1, -1);
+    else if (e.key === "Escape") HT.finish();
+  }
+
+  let wasPaused = false;
+  function openHowto(from) {
+    HT.from = from;
+    if (from === "play" && G) { wasPaused = G.paused; setPause(true); }
+    HT.finishLabel = from === "play" ? "Back to the game" : "Invest and start";
+    show("howto"); htGo(0, 1);
+  }
+  HT.finish = () => {
+    try { localStorage.setItem("prism-handle-howto", "1"); } catch (_) {}
+    if (HT.from === "play") { show("play"); setPause(wasPaused); } else start();
+  };
+  function begin() {                         // first time: walk through it before playing
     let seen = null; try { seen = localStorage.getItem("prism-handle-howto"); } catch (_) {}
     if (seen) start(); else openHowto("setup");
   }
-  $("ht-go").addEventListener("click", () => {
-    try { localStorage.setItem("prism-handle-howto", "1"); } catch (_) {}
-    if (htFrom === "play") { show("play"); setPause(wasPaused); } else start();
-  });
-  $("ht-back").addEventListener("click", () => show("setup"));
   $("show-howto").addEventListener("click", () => openHowto("setup"));
   $("help").addEventListener("click", () => openHowto("play"));
 
@@ -720,7 +836,7 @@ const D = __DATA__;
   document.addEventListener("keydown", e => {
     const on = id => $(id).classList.contains("on");
     if (on("setup") && e.key === "Enter") begin();
-    else if (on("howto")) { if (e.key === "Enter") $("ht-go").click(); if (e.key === "Escape") (htFrom === "play" ? $("ht-go") : $("ht-back")).click(); }
+    else if (on("howto")) htKeys(e);
     else if (on("play")) { if (e.key === " ") { e.preventDefault(); setPause(!G.paused); } if (e.key === "s" || e.key === "S") sell(); }
     else if (on("end") && e.key === "Enter") $("again").click();
   });
