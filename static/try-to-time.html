@@ -203,6 +203,24 @@ button { font: inherit; cursor: pointer; }
 .end-btns { display: flex; gap: 10px; flex-wrap: wrap; }
 .foot { font-size: 11.5px; color: var(--muted); margin-top: 18px; line-height: 1.5; }
 
+
+/* ---------- how to play ---------- */
+#howto .card { padding: 36px 44px 32px 44px; }
+.ht-title { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 22px 0; }
+.ht-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 28px; margin-bottom: 26px; }
+.ht-step { display: grid; grid-template-columns: 34px 1fr; gap: 14px; align-items: start; opacity: 0; animation: rise .5s var(--ease) forwards; }
+.ht-step i { font-style: normal; width: 34px; height: 34px; border-radius: 50%; background: #EEF3F8; color: var(--navy);
+  display: grid; place-items: center; font-weight: 700; font-size: 15px; }
+.ht-step b { display: block; font-size: 15.5px; font-weight: 600; margin: 5px 0 3px 0; }
+.ht-step p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink2); }
+.ht-step p em { font-style: normal; font-weight: 600; color: var(--ink); }
+.ht-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 18px; border-top: 1px solid var(--line); }
+.ht-tip { font-size: 13px; color: var(--muted); margin-left: auto; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font-size: 13.5px; font-weight: 500;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #C9D5E2; }
+.linkbtn:hover { text-decoration-color: var(--navy); }
+@media (max-width: 760px) { #howto .card { padding: 24px 18px; } .ht-tip { margin-left: 0; } }
+
 @media (max-width: 760px) {
   #start .card { grid-template-columns: 1fr; padding: 28px 22px; }
   .shuffle { height: 280px; }
@@ -235,8 +253,23 @@ button { font: inherit; cursor: pointer; }
         <button class="btn ghost" id="go-quick">Quick <span id="quick-lbl"></span> <span class="kbd">Q</span></button>
       </div>
       <div class="best" id="best"></div>
+      <button class="linkbtn" id="show-howto" style="margin-top:10px">How to play</button>
     </div>
     <div class="shuffle"><div class="sh-col" id="shcol"></div></div>
+  </div>
+</section>
+
+<!-- HOW TO PLAY -->
+<section id="howto" class="screen">
+  <div class="card">
+    <div class="eyebrow">How to play</div>
+    <div class="ht-title">Try to time it, in five steps</div>
+    <div class="ht-steps" id="ht-steps"></div>
+    <div class="ht-foot">
+      <button class="btn" id="ht-go"></button>
+      <button class="btn ghost" id="ht-back">Back</button>
+      <span class="ht-tip">On a keyboard: <b>1</b>–<b>5</b> picks an index, <b>Enter</b> locks it in and moves on.</span>
+    </div>
   </div>
 </section>
 
@@ -247,6 +280,7 @@ button { font: inherit; cursor: pointer; }
       <div>
         <div class="round" id="round"></div>
         <div class="q">Who wins <span class="yr" id="yr"></span>?</div>
+        <button class="linkbtn" id="help" style="margin-top:4px">How to play</button>
       </div>
       <div class="sb">
         <div class="tile" id="t-pts"><label>Points</label><b class="num" id="pts">0</b><span class="pop" id="pop-pts"></span></div>
@@ -364,7 +398,7 @@ const D = __DATA__;
     show("game");
     buildTrack(); buildQuilt(); setRound(true);
   }
-  function show(id) { ["start", "game", "end"].forEach(s => $(s).classList.toggle("on", s === id));
+  function show(id) { ["start", "howto", "game", "end"].forEach(s => $(s).classList.toggle("on", s === id));
     window.scrollTo({ top: 0, behavior: "smooth" }); }
 
   // equal mix: 20% in each at the start, never touched
@@ -742,14 +776,49 @@ const D = __DATA__;
     });
   }
 
+  // ---------- how to play ----------
+  const STEPS = [
+    ["It's the end of " + (D.firstRound - 1),
+     `Five Nifty 500 factor indices compete every year: <em>Momentum, Value, Quality, Low Vol and Growth</em>. You see how they did in ${YEARS[0]}–${D.firstRound - 1}, then the game starts.`],
+    ["Read the clues",
+     `Each year you see only what was known at the time: last year's return and rank, <em>3- and 5-year returns</em>, <em>risk</em> (how much it swings), its <em>worst fall</em>, and how often it has won. Click a column to sort by it.`],
+    ["Back one index",
+     `Click the index you think will win the coming year, then press <em>Lock it in</em>. Your money moves fully into it for that year.`],
+    ["Watch the year play out",
+     `The bars race to that year's real returns. You score <em>100 points</em> for picking the winner, 50 for second and 20 for third. Back-to-back winners add a streak bonus.`],
+    ["Beat the mix",
+     `The real opponent is the <em>equal mix</em>: 20% in each index at the start, never touched. At the end you'll see who won, and how you did against 10,000 random players.`],
+  ];
+  $("ht-steps").innerHTML = STEPS.map(([t, d], i) =>
+    `<div class="ht-step" style="animation-delay:${80 + i * 70}ms"><i>${i + 1}</i><div><b>${t}</b><p>${d}</p></div></div>`).join("");
+  let ht = { mode: "full", from: "start" };
+  function openHowto(mode, from) {
+    ht = { mode, from };
+    $("ht-go").innerHTML = from === "game" ? "Back to the game"
+      : `Start the ${mode === "quick" ? "quick run" : "full run"} · ${MODES[mode].n} years <span class="kbd">Enter</span>`;
+    $("ht-back").style.display = from === "game" ? "none" : "";
+    show("howto");
+  }
+  function begin(mode) {                     // first time: explain before playing
+    if (store.get("prism-ttt-howto")) newGame(mode); else openHowto(mode, "start");
+  }
+  $("ht-go").addEventListener("click", () => {
+    store.set("prism-ttt-howto", "1");
+    if (ht.from === "game") show("game"); else newGame(ht.mode);
+  });
+  $("ht-back").addEventListener("click", () => show(ht.from === "game" ? "game" : "start"));
+  $("show-howto").addEventListener("click", () => openHowto("full", "start"));
+  $("help").addEventListener("click", () => openHowto(S ? S.mode : "full", "game"));
+
   // ---------- controls ----------
-  $("go-full").addEventListener("click", () => newGame("full"));
-  $("go-quick").addEventListener("click", () => newGame("quick"));
+  $("go-full").addEventListener("click", () => begin("full"));
+  $("go-quick").addEventListener("click", () => begin("quick"));
   $("again").addEventListener("click", () => newGame(S.mode));
   $("other").addEventListener("click", () => newGame(S.mode === "full" ? "quick" : "full"));
   document.addEventListener("keydown", e => {
     const on = id => $(id).classList.contains("on");
-    if (on("start")) { if (e.key === "f" || e.key === "F") newGame("full"); if (e.key === "q" || e.key === "Q") newGame("quick"); return; }
+    if (on("start")) { if (e.key === "f" || e.key === "F") begin("full"); if (e.key === "q" || e.key === "Q") begin("quick"); return; }
+    if (on("howto")) { if (e.key === "Enter") $("ht-go").click(); if (e.key === "Escape") $("ht-back").click(); return; }
     if (on("end")) { if (e.key === "Enter") newGame(S.mode); return; }
     if (/^[1-5]$/.test(e.key)) choose(KEYS[+e.key - 1]);
     if (e.key === "Enter") { if (!S.revealed) reveal(); else if ($("next")) next(); }

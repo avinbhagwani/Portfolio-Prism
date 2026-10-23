@@ -144,8 +144,27 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .e-chart { position: relative; height: 200px; margin-top: 14px; }
 .foot { font-size: 11.5px; color: var(--muted); margin-top: 18px; line-height: 1.5; }
 
+
+/* ---------- how to play ---------- */
+.ht-title { font-size: 30px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 22px 0; }
+.ht-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 28px; margin-bottom: 26px; }
+.ht-step { display: grid; grid-template-columns: 34px 1fr; gap: 14px; align-items: start; opacity: 0; animation: rise .5s var(--ease) forwards; }
+.ht-step i { font-style: normal; width: 34px; height: 34px; border-radius: 50%; background: #EEF3F8; color: var(--navy);
+  display: grid; place-items: center; font-weight: 700; font-size: 15px; }
+.ht-step.red i { background: #FBECEC; color: var(--red); }
+.ht-step b { display: block; font-size: 15.5px; font-weight: 600; margin: 5px 0 3px 0; }
+.ht-step p { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink2); }
+.ht-step p em { font-style: normal; font-weight: 600; color: var(--ink); }
+.ht-step p .r { color: var(--red); font-weight: 600; }
+.ht-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 18px; border-top: 1px solid var(--line); }
+.ht-tip { font-size: 13px; color: var(--muted); margin-left: auto; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--navy); font-size: 13.5px; font-weight: 500;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #C9D5E2; }
+.linkbtn:hover { text-decoration-color: var(--navy); }
+
 @media (max-width: 760px) {
   .screen { padding: 20px 16px; }
+  .ht-tip { margin-left: 0; }
   .s-grid { grid-template-columns: 1fr; } .mystery { height: 160px; }
   .s-title { font-size: 34px; } .e-h { font-size: 28px; }
   .nums { grid-template-columns: 1fr 1fr; } .n.hero { grid-column: 1 / -1; }
@@ -173,8 +192,21 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
         <button class="btn" id="go">Invest <span class="kbd">Enter</span></button>
         <span class="warn">It plays month by month. You can sell any time.</span>
       </div>
+      <button class="linkbtn" id="show-howto" style="margin-top:14px">How to play</button>
     </div>
     <div class="mystery" id="mystery"></div>
+  </div>
+</section>
+
+<!-- HOW TO PLAY -->
+<section class="screen" id="howto">
+  <div class="eyebrow">How to play</div>
+  <div class="ht-title">Can you handle it? Five steps</div>
+  <div class="ht-steps" id="ht-steps"></div>
+  <div class="ht-foot">
+    <button class="btn" id="ht-go"></button>
+    <button class="btn ghost" id="ht-back">Back</button>
+    <span class="ht-tip">On a keyboard: <b>Space</b> pauses, <b>S</b> sells.</span>
   </div>
 </section>
 
@@ -190,6 +222,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
         <span class="num" id="bpm">72</span> bpm</div>
       <div class="seg" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="4">4×</button></div>
       <button class="icon" id="pause" title="Pause (Space)"><svg viewBox="0 0 16 16" id="pause-ico"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg></button>
+      <button class="icon" id="help" title="How to play"><svg viewBox="0 0 16 16"><path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm0 10.6a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8zm1.1-3.6c-.5.3-.6.5-.6.9v.3H7.3v-.4c0-.8.3-1.3 1-1.7.5-.3.7-.5.7-.9s-.4-.8-1-.8-1 .4-1.1 1H5.7C5.8 5.4 6.7 4.6 8 4.6s2.3.8 2.3 1.9c0 .9-.5 1.5-1.2 2z"/></svg></button>
       <button class="icon" id="skip" title="Skip to the end"><svg viewBox="0 0 16 16"><path d="M2 2.5v11l7-5.5zM9 2.5v11l5.5-5.5z"/></svg></button>
     </div>
   </div>
@@ -639,9 +672,44 @@ const D = __DATA__;
   // test hook: lets automated checks rebuild a run without playing it
   window.__handleIt = { simulate, xirr, yearly, cfg, worst: () => worst };
 
+  // ---------- how to play ----------
+  const STEPS = [
+    ["", "Choose what to invest in",
+     `Pick an index or a mutual fund in the box above the game, then choose a <em>lump sum</em> or a <em>monthly SIP</em> and an amount.`],
+    ["", "We invest at the worst moment",
+     `Your money goes in at the very top, right before the deepest fall in that index's or fund's history. <em>You won't know which fall it is</em>: dates stay hidden until the end.`],
+    ["", "Live through it, month by month",
+     `Watch your money, your return, XIRR (shown after a year), how far you are behind or ahead of <em>cash</em>, and how long you've been underwater. <span class="r">Red</span> means you're below what you put in. Pause, speed up or skip whenever you like.`],
+    ["red", "Sell if you can't handle it",
+     `The <span class="r">Sell</span> button is always there. If you press it, your money is locked in, and the game carries on to show what would have happened if you'd stayed.`],
+    ["", "See what patience was worth",
+     `At the end you find out the real period, the crises you lived through, and what holding on, selling and keeping it in cash would each have given you.`],
+  ];
+  $("ht-steps").innerHTML = STEPS.map(([cls, t, d], i) =>
+    `<div class="ht-step ${cls}" style="animation-delay:${80 + i * 70}ms"><i>${i + 1}</i><div><b>${t}</b><p>${d}</p></div></div>`).join("");
+  let htFrom = "setup", wasPaused = false;
+  function openHowto(from) {
+    htFrom = from;
+    if (from === "play" && G) { wasPaused = G.paused; setPause(true); }
+    $("ht-go").innerHTML = from === "play" ? "Back to the game" : `Invest and start <span class="kbd">Enter</span>`;
+    $("ht-back").style.display = from === "play" ? "none" : "";
+    show("howto");
+  }
+  function begin() {                         // first time: explain before playing
+    let seen = null; try { seen = localStorage.getItem("prism-handle-howto"); } catch (_) {}
+    if (seen) start(); else openHowto("setup");
+  }
+  $("ht-go").addEventListener("click", () => {
+    try { localStorage.setItem("prism-handle-howto", "1"); } catch (_) {}
+    if (htFrom === "play") { show("play"); setPause(wasPaused); } else start();
+  });
+  $("ht-back").addEventListener("click", () => show("setup"));
+  $("show-howto").addEventListener("click", () => openHowto("setup"));
+  $("help").addEventListener("click", () => openHowto("play"));
+
   // ---------- plumbing ----------
-  function show(id) { ["setup", "play", "end"].forEach(s => $(s).classList.toggle("on", s === id)); }
-  $("go").addEventListener("click", start);
+  function show(id) { ["setup", "howto", "play", "end"].forEach(s => $(s).classList.toggle("on", s === id)); }
+  $("go").addEventListener("click", begin);
   $("sell").addEventListener("click", sell);
   $("pause").addEventListener("click", () => setPause(!G.paused));
   $("skip").addEventListener("click", skip);
@@ -651,7 +719,8 @@ const D = __DATA__;
   $("other").addEventListener("click", () => { cfg.mode = G.sip ? "lump" : "sip"; renderSetup(); start(); });
   document.addEventListener("keydown", e => {
     const on = id => $(id).classList.contains("on");
-    if (on("setup") && e.key === "Enter") start();
+    if (on("setup") && e.key === "Enter") begin();
+    else if (on("howto")) { if (e.key === "Enter") $("ht-go").click(); if (e.key === "Escape") (htFrom === "play" ? $("ht-go") : $("ht-back")).click(); }
     else if (on("play")) { if (e.key === " ") { e.preventDefault(); setPause(!G.paused); } if (e.key === "s" || e.key === "S") sell(); }
     else if (on("end") && e.key === "Enter") $("again").click();
   });
