@@ -112,7 +112,11 @@ def render_handle_it():
         st.info("Search for a fund above to start.")
         return
     with st.spinner("Loading history..."):
-        data = payload("index" if kind == "Index" else "fund", key, label)
+        try:
+            data = payload("index" if kind == "Index" else "fund", key, label)
+        except LookupError:
+            st.warning("Couldn't download this fund's NAV history just now. Please try again in a minute.")
+            return
     if data is None:
         st.warning("Couldn't load enough history for this one. Pick something with at least a few years of data, or try again in a minute.")
         return

@@ -120,6 +120,9 @@ def fund_daily(code):
 def payload(kind, key, label):
     """kind 'index' (key = index name) or 'fund' (key = scheme code)."""
     daily = index_daily(key) if kind == "index" else fund_daily(key)
+    if kind == "fund" and daily.empty:
+        # a failed download: raise so the miss isn't cached, and the next try refetches
+        raise LookupError(f"Couldn't load NAV history for scheme {key}")
     if daily.empty or len(daily) < 300:
         return None
     daily = _clean(daily)

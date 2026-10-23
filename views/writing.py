@@ -13,7 +13,6 @@ shared directly.
 """
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from core import substack as sb
 
@@ -281,4 +280,4 @@ def _related_tool(post):
 
 def _subscribe_box(heading):
     st.markdown(f"<div class='pw-section'>{heading}</div>", unsafe_allow_html=True)
-    components.iframe(sb.EMBED_URL, height=300)
+    st.iframe(sb.EMBED_URL, height=300)

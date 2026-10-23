@@ -284,6 +284,17 @@ def render():
                     }
                 )
 
+        # The same fund picked in two rows is one holding: add its weights
+        merged = {}
+        for x in selected_portfolio:
+            if x["code"] in merged:
+                merged[x["code"]]["weight"] += x["weight"]
+            else:
+                merged[x["code"]] = dict(x)
+        if len(merged) < len(selected_portfolio):
+            st.caption("The same fund appears more than once; its weights are added together.")
+        selected_portfolio = list(merged.values())
+
         total_weight = sum(
             x["weight"]
             for x in selected_portfolio
@@ -368,8 +379,13 @@ def render():
                     else:
                         st.session_state.portfolio_analysis_run = True
 
-                # Tab selection sits below fund selection
-                if st.session_state.portfolio_analysis_run:
+                # Tab selection sits below fund selection. Re-check the inputs
+                # every run: once "Run" was pressed, later edits (weights no longer
+                # 100%, dates reversed) used to keep producing results anyway.
+                inputs_ok = abs(total_weight - 100) <= 0.001 and start_date < end_date
+                if st.session_state.portfolio_analysis_run and not inputs_ok:
+                    st.info("Fix the weights or dates above, then the analysis will update.")
+                if st.session_state.portfolio_analysis_run and inputs_ok:
 
                     returns_list = []
                     missing_fund = False

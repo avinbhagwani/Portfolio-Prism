@@ -120,10 +120,11 @@ def _from_archive_api():
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_posts():
-    """Newest first. Returns (posts, error_message_or_None)."""
+def _load_posts():
+    """Newest first. Raises if neither the feed nor the archive API answers,
+    so a failure isn't cached for an hour."""
+    path = os.environ.get(FEED_FILE_ENV)
     try:
-        path = os.environ.get(FEED_FILE_ENV)
         if path:
             with open(path, encoding="utf-8") as fh:
                 posts = _parse_feed(fh.read())
@@ -131,14 +132,19 @@ def load_posts():
             r = requests.get(FEED_URL, headers=HEADERS, timeout=10)
             r.raise_for_status()
             posts = _parse_feed(r.text)
-    except Exception as feed_error:
-        try:
-            posts = _from_archive_api()
-        except Exception:
-            return [], f"Couldn't reach the Substack feed ({type(feed_error).__name__})."
+    except Exception:
+        posts = _from_archive_api()       # raises too if this fails
     posts = [p for p in posts if p.words >= MIN_WORDS and p.title]
     posts.sort(key=lambda p: (p.date is not None, p.date), reverse=True)
-    return posts, None
+    return posts
+
+
+def load_posts():
+    """Newest first. Returns (posts, error_message_or_None)."""
+    try:
+        return _load_posts(), None
+    except Exception as e:
+        return [], f"Couldn't reach the Substack feed ({type(e).__name__})."
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
