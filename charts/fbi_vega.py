@@ -26,13 +26,20 @@ ZERO = "#C9CFD6"
 COLOR_A = "#1F4E79"
 COLOR_B = "#C08A2E"
 COLOR_BENCH = "#A3ABB5"
-SERIES_COLORS = [COLOR_A, COLOR_B]
+# first two are the FBI pair; the rest let pages compare up to ten series
+SERIES_COLORS = [COLOR_A, COLOR_B, "#2F8F9D", "#5E9A62", "#8E5B9F",
+                 "#C9573C", "#6C8EBF", "#9A8B3C", "#C77DA6", "#5F6B78"]
 GOOD_ZONE = "#EEF5EA"
 GOOD_TEXT = "#5B7A4E"
 
 FONT = "Inter, sans-serif"
 HEIGHT = 340
 LABEL_PAD = 190
+
+
+# charts are thinned to weekly points; comparing up to ten series can still
+# pass Altair's 5,000-row default, which is a guard, not a browser limit
+alt.data_transformers.disable_max_rows()
 
 
 @alt.theme.register("prism", enable=True)
@@ -96,7 +103,7 @@ def _end_labels(wide, names, benchmark, fmt, y_range):
 
 
 def _line_chart(wide, names, benchmark, y_title, y_format, label_fmt,
-                zero_line=None, y_label_expr=None):
+                zero_line=None, y_label_expr=None, end_labels=True):
     wide = _thin(wide)
     data = _long(wide, names)
     scale = _scale(names, benchmark)
@@ -110,7 +117,7 @@ def _line_chart(wide, names, benchmark, y_title, y_format, label_fmt,
 
     first, last_d = wide.index[0], wide.index[-1]
     span_days = (last_d - first).days
-    x_end = last_d + pd.Timedelta(days=int(span_days * 0.27))
+    x_end = last_d + pd.Timedelta(days=int(span_days * (0.27 if end_labels else 0.02)))
     step = 1 if span_days < 365 * 7 else 2 if span_days < 365 * 14 else 4
     years_ticks = [y for y in range(first.year + 1, last_d.year + 1) if y % step == 0]
     if span_days < 365 * 2:
@@ -157,7 +164,7 @@ def _line_chart(wide, names, benchmark, y_title, y_format, label_fmt,
         color=alt.Color("series:N", scale=scale),
     )
 
-    layers = [lines, rule, dots, labels]
+    layers = [lines, rule, dots] + ([labels] if end_labels else [])
     if zero_line is not None:
         layers.insert(0, alt.Chart(pd.DataFrame({"y": [zero_line]})).mark_rule(
             color=ZERO, strokeWidth=1).encode(y="y:Q"))
@@ -201,7 +208,7 @@ def rolling_chart(rolling, names, benchmark):
     )
 
 
-def drawdown_chart(window, names, benchmark):
+def drawdown_chart(window, names, benchmark, end_labels=True):
     dd = pd.DataFrame({
         n: (window[n] / window[n].cummax() - 1) * 100 for n in names
     })
@@ -209,6 +216,7 @@ def drawdown_chart(window, names, benchmark):
         dd, names, benchmark, None, None,
         _Fmt(_pct0, ".1f"), zero_line=0,
         y_label_expr="format(datum.value, '.0f') + '%'",
+        end_labels=end_labels,
     )
 
 
