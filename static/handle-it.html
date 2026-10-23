@@ -81,6 +81,7 @@ button { font: inherit; cursor: pointer; color: inherit; }
 .n b { font-size: 19px; font-weight: 700; letter-spacing: -.01em; transition: color .3s ease; }
 .n.hero { background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
 .n.hero b { font-size: 27px; }
+.n b.wait { font-size: 13px; color: var(--muted); font-weight: 500; display: inline-block; padding-top: 6px; }
 .n small { display: block; font-size: 11px; color: var(--muted); margin-top: 1px; }
 .neg { color: var(--red); } .pos { color: var(--green); }
 
@@ -292,6 +293,10 @@ const D = __DATA__;
     return (lo + hi) / 2 * 100;
   }
 
+  // XIRR is shown only once the first money has been in for a year: annualising a few
+  // months of returns turns a 26% dip into "-70% a year", which is true but misleading
+  const yearly = (flows, endT, endV) => (flows.length && endT - flows[0].t >= YR - 2 * DAY) ? xirr(flows, endT, endV) : null;
+
   // ---------- the worst fall (never shown before the end) ----------
   const worst = D.scenarios.reduce((b, s) => (!b || s.depth < b.depth ? s : b), null);
   const idxAt = t => { let lo = 0, hi = L.length - 1; while (lo < hi) { const m = (lo + hi) >> 1; if (L[m].t < t) lo = m + 1; else hi = m; } return lo; };
@@ -495,8 +500,10 @@ const D = __DATA__;
     $("v-inv").textContent = inr(inv);
     const ab = $("v-abs"); ab.textContent = pct(pnl * 100); ab.className = "num " + (pnl < 0 ? "neg" : "pos");
     const fl = G.flows.filter(f => f.i <= (G.sold ? G.sold.i : i));
-    const x = xirr(fl, G.sold ? G.rows[G.sold.i].t : r.t, val);
-    const xb = $("v-xirr"); xb.textContent = x == null ? "—" : pct(x); xb.className = "num " + (x == null ? "" : x < 0 ? "neg" : "pos");
+    const tEnd = G.sold ? G.rows[G.sold.i].t : r.t, x = yearly(fl, tEnd, val);
+    const xb = $("v-xirr");
+    if (x == null) { xb.textContent = tEnd - G.rows[0].t < YR ? "after 1 yr" : "—"; xb.className = "num wait"; }
+    else { xb.textContent = pct(x); xb.className = "num " + (x < 0 ? "neg" : "pos"); }
     // you versus the same money left in cash
     const diff = val - r.cash;
     const cb = $("v-cash"); cb.textContent = (diff >= 0 ? "+" : "") + short(diff); cb.className = "num " + (diff < 0 ? "neg" : "pos");
@@ -540,9 +547,10 @@ const D = __DATA__;
   }
   function finish() {
     const R = G.rows, n = R.length, endR = R[n - 1];
-    const stay = { val: endR.val, inv: endR.inv, x: xirr(G.flows, endR.t, endR.val) };
-    const mine = G.sold ? { val: G.sold.val, inv: G.sold.inv, x: xirr(G.flows.filter(f => f.i <= G.sold.i), G.sold.t, G.sold.val) } : stay;
-    const cash = { val: endR.cash, x: xirr(G.flows, endR.t, endR.cash) };
+    const stay = { val: endR.val, inv: endR.inv, x: yearly(G.flows, endR.t, endR.val) };
+    const mine = G.sold ? { val: G.sold.val, inv: G.sold.inv, x: yearly(G.flows.filter(f => f.i <= G.sold.i), G.sold.t, G.sold.val),
+                            short: G.sold.t - R[0].t < YR } : stay;
+    const cash = { val: endR.cash, x: yearly(G.flows, endR.t, endR.cash) };
     const name = crisisName(R[0].t);
     $("e-eyebrow").textContent = `${D.name}${name ? " · this was " + name : ""}`;
     // the real period, and every storm along the way
@@ -582,13 +590,13 @@ const D = __DATA__;
       ["Highest pulse", G.peakBpm + " bpm", ""], [G.sip ? "SIPs paid while down" : "Cash rate when you started", G.sip ? String(G.underSips) : G.rate0.toFixed(1) + "% a year", ""]];
     $("pain").innerHTML = tiles.map(([l, v, c]) => `<div class="n"><label>${l}</label><b class="num ${c}">${v}</b></div>`).join("");
     const rows = [];
-    if (G.sold) rows.push({ t: "You (sold)", v: mine.val, x: mine.x, cls: "me" }, { t: "If you'd stayed invested", v: stay.val, x: stay.x, cls: "stay" });
+    if (G.sold) rows.push({ t: "You (sold)", v: mine.val, x: mine.x, cls: "me", note: mine.short ? `${pct((mine.val / mine.inv - 1) * 100)} in ${dur(G.sold.t - R[0].t)}` : null }, { t: "If you'd stayed invested", v: stay.val, x: stay.x, cls: "stay" });
     else rows.push({ t: "You (stayed invested)", v: stay.val, x: stay.x, cls: "me" });
     rows.push({ t: "The same money in cash", v: cash.val, x: cash.x, cls: "cash" }, { t: "What you put in", v: stay.inv, x: null });
     const top = Math.max(...rows.map(r => r.v));
     $("cmp").innerHTML = rows.map((r, i) => `<div class="crow ${r.cls || ""}" style="animation-delay:${200 + i * 90}ms">
       <div><div class="t">${r.t}</div><div class="bar"><i data-w="${r.v / top * 100}"></i></div></div>
-      <div class="v num">${short(r.v)}${r.x != null ? `<small>${pct(r.x)} a year</small>` : ""}</div></div>`).join("");
+      <div class="v num">${short(r.v)}${r.x != null ? `<small>${pct(r.x)} a year</small>` : r.note ? `<small>${r.note}</small>` : ""}</div></div>`).join("");
     setTimeout(() => document.querySelectorAll("#cmp .bar i").forEach(b => b.style.width = b.dataset.w + "%"), 350);
     // the line the whole game is about: staying invested versus cash
     const ic = stay.val - cash.val;
@@ -627,6 +635,9 @@ const D = __DATA__;
     path(i => R[i].val, G.sold ? "rgba(46,139,87,.85)" : "#1F4E79", 2.2, G.sold ? [6, 4] : null);
     if (G.sold) { path(i => myVal(i), "#1F4E79", 2.2); x.fillStyle = "#D23F4A"; x.beginPath(); x.arc(X(G.sold.i), Y(G.sold.val), 4.5, 0, Math.PI * 2); x.fill(); }
   }
+
+  // test hook: lets automated checks rebuild a run without playing it
+  window.__handleIt = { simulate, xirr, yearly, cfg, worst: () => worst };
 
   // ---------- plumbing ----------
   function show(id) { ["setup", "play", "end"].forEach(s => $(s).classList.toggle("on", s === id)); }
