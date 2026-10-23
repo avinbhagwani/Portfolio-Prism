@@ -4,6 +4,10 @@ IndiaFactorLibrary factor data. Successful responses are cached with
 st.cache_data; failures are not, so a momentary outage clears on retry.
 """
 
+import json
+import os
+from pathlib import Path
+
 import requests
 import pandas as pd
 import streamlit as st
@@ -18,8 +22,22 @@ from core.config import get_model_config
 # cached as "no results" for an hour, so one blip from mfapi.in left fund
 # search showing "No funds found" until the cache expired.
 
+# For local testing without network: point this at a folder holding
+# search.json, nav_<code>.json (mfapi format) and factors_<dataset>.csv
+FIXTURE_ENV = "PRISM_MF_FIXTURE_DIR"
+
+
+def _fixture(name):
+    folder = os.environ.get(FIXTURE_ENV)
+    return Path(folder) / name if folder else None
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _search_funds(term):
+    if _fixture("search.json"):
+        rows = json.loads(_fixture("search.json").read_text())
+        return [{"name": x["schemeName"], "code": str(x["schemeCode"])}
+                for x in rows if term.lower() in x["schemeName"].lower()]
     response = requests.get(
         "https://api.mfapi.in/mf/search",
         params={"q": term},
@@ -43,12 +61,16 @@ def search_funds(term):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_fund_history(scheme_code):
-    response = requests.get(
-        f"https://api.mfapi.in/mf/{scheme_code}",
-        timeout=30
-    )
-    response.raise_for_status()
-    df = pd.DataFrame(response.json().get("data", []))
+    if _fixture("search.json"):
+        payload = json.loads(_fixture(f"nav_{scheme_code}.json").read_text())
+    else:
+        response = requests.get(
+            f"https://api.mfapi.in/mf/{scheme_code}",
+            timeout=30
+        )
+        response.raise_for_status()
+        payload = response.json()
+    df = pd.DataFrame(payload.get("data", []))
     if df.empty:
         raise ValueError(f"No NAV history returned for {scheme_code}")
     df["date"] = pd.to_datetime(df["date"], format="%d-%m-%Y", errors="coerce")
@@ -71,8 +93,10 @@ def fetch_fund_history(scheme_code):
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_factor_data(model_key):
     config = get_model_config(model_key)
-    data = IndiaFactorLibrary().read(config["dataset"])
-    factors = data[0].copy()
+    if _fixture("search.json"):
+        factors = pd.read_csv(_fixture(f"factors_{config['dataset']}.csv"), index_col=0)
+    else:
+        factors = IndiaFactorLibrary().read(config["dataset"])[0].copy()
     factors.index = pd.to_datetime(factors.index).to_period("M").to_timestamp("M")
     # Normalise equity naming
     if "SMB5" in factors.columns and "SMB" not in factors.columns:
