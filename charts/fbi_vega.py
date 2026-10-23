@@ -10,7 +10,13 @@ import altair as alt
 import numpy as np
 import pandas as pd
 
-from core.fbi_metrics import pretty_name
+from core.fbi_metrics import pretty_name as _index_name
+
+
+def pretty_name(name):
+    """NSE index names come in capitals and get NSE's casing; anything
+    already in mixed case (a fund name) is shown as it is."""
+    return _index_name(name) if name.isupper() else name
 
 INK = "#1B2533"
 MUTED = "#6B7480"
