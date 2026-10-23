@@ -5,7 +5,10 @@ The player picks an index (from the FinAPI history) or a mutual fund (NAV
 from mfapi.in). We find the worst market peaks in that history, the moments
 just before the deepest falls, and hand the browser:
 
-  levels     weekly closing levels (Friday, or the last trading day)
+  levels     closing levels on every week's last trading day, plus the
+             exact days money goes in: each peak, and the first trading
+             day of every month (when a SIP is paid), so purchases happen
+             at the real price of that day, not a later weekly close
   scenarios  the deepest drawdown episodes: peak, trough, recovery
   cash       what the same money would have earned in cash, on the same
              weeks: RBI's repo rate until 2011, then NSE's Nifty 1D Rate
@@ -47,14 +50,21 @@ PRESETS = [
 ]
 
 
-def _weekly(daily):
+def _clean(daily):
     s = daily.dropna()
-    s = s[s > 0]
-    w = s.resample("W-FRI").last().dropna()
-    # stamp each week with its real last trading day, not the Friday
-    last_day = s.index.to_series().resample("W-FRI").last().dropna()
-    w.index = pd.DatetimeIndex(last_day.loc[w.index].values)
-    return w
+    return s[s > 0].sort_index()
+
+
+def _sample(daily, extra_days=()):
+    """Week-end closes, plus the first trading day of each month and any
+    extra days (the peaks), all at their real closing levels."""
+    s = _clean(daily)
+    days = s.index.to_series()
+    week_ends = days.resample("W-FRI").last().dropna()
+    month_starts = days.resample("MS").first().dropna()
+    keep = pd.DatetimeIndex(week_ends.values).union(pd.DatetimeIndex(month_starts.values))
+    keep = keep.union(pd.DatetimeIndex([d for d in extra_days if d in s.index]))
+    return s.loc[keep]
 
 
 def _scenarios(daily):
@@ -112,12 +122,14 @@ def payload(kind, key, label):
     daily = index_daily(key) if kind == "index" else fund_daily(key)
     if daily.empty or len(daily) < 300:
         return None
-    weekly = _weekly(daily)
+    daily = _clean(daily)
+    scenarios = _scenarios(daily)
+    weekly = _sample(daily, [pd.Timestamp(x["peak"]) for x in scenarios])
     data = {
         "name": label,
         "kind": kind,
         "levels": _series_points(weekly),
-        "scenarios": _scenarios(daily),
+        "scenarios": scenarios,
         "asOf": f"{daily.index.max():%d %b %Y}",
     }
     cash = cash_daily()
