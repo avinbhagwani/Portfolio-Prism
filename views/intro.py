@@ -58,6 +58,7 @@ PAGE_ANIMATIONS = {
     "factor-analysis": _svg("anim-factor-analysis.svg"),     # fund splits into factors
     "fbi-intelligence": _svg("anim-fbi-intelligence.svg"),   # indices race a benchmark
     "drawdown-analysis": _svg("anim-drawdown-analysis.svg"), # fall, underwater, recovery
+    "efficient-frontier": _svg("anim-efficient-frontier.svg"), # the frontier, then the best mix
     "writing": _svg("anim-writing.svg"),                     # a page being written
     "try-to-time": _svg("anim-try-to-time.svg"),             # the order reshuffles
     "can-you-handle-it": _svg("anim-can-you-handle-it.svg"), # the fall, then the climb back

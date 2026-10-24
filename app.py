@@ -11,7 +11,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from views import (factor_analysis, factor_indexes, drawdown_analysis, coming_soon,
+from views import (factor_analysis, factor_indexes, drawdown_analysis, efficient_frontier,
                    games, home, intro, sidebar, writing)
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -36,10 +36,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-def _efficient_frontier():
-    coming_soon.render("Efficient Frontier")
-
-
 PAGES = [
     st.Page(home.render, title="Home", icon=":material/home:",
             url_path="home", default=True),
@@ -55,7 +51,7 @@ PAGES = [
             icon=":material/monitor_heart:", url_path="can-you-handle-it"),
     st.Page(writing.render, title="Writing",
             icon=":material/edit_note:", url_path="writing"),
-    st.Page(_efficient_frontier, title="Efficient Frontier",
+    st.Page(efficient_frontier.render, title="Efficient Frontier",
             icon=":material/scatter_plot:", url_path="efficient-frontier"),
 ]
 
