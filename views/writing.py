@@ -75,8 +75,9 @@ ARTICLE_CSS = """
 .pw-article p {margin: 0 0 1.15em 0;}
 .pw-article.pw-fade {position: relative; max-height: none;}
 .pw-article.pw-fade::after {content: ""; position: absolute; left: 0; right: 0; bottom: 0;
-  height: 140px; pointer-events: none;
-  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, #FFFFFF 92%);}
+  height: min(60%, 220px); pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.75) 45%, #FFFFFF 85%);}
 .pw-article img.pw-cover {margin: 0 0 1.6em 0; width: 100%;}
 .pw-article h1, .pw-article h2, .pw-article h3, .pw-article h4 {
   font-weight: 650; line-height: 1.3; margin: 1.8em 0 0.6em 0; color: #1B2533;}

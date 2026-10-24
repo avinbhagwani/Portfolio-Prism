@@ -264,12 +264,12 @@ def _hook_score(block, text, next_block):
     return score
 
 
-def preview(body, share=0.25, min_words=100):
+def preview(body, share=0.10, min_words=50):
     """
     The opening of an article, ending on a hook so readers want the rest.
 
-    Looks for whole top-level blocks ending somewhere between about 15% and
-    30% of the words (a bit earlier than a plain third), scores every
+    Looks for whole top-level blocks ending somewhere between about 6% and
+    15% of the words (aiming for 10%), scores every
     possible stopping point by how much it leaves the reader hanging, and
     stops at the best one. Returns (preview_html, remaining_words);
     remaining_words is 0 when the article is short enough to show in full.
@@ -282,8 +282,8 @@ def preview(body, share=0.25, min_words=100):
     if total <= target * 1.4:
         return body, 0
 
-    lo = max(int(min_words * 0.8), int(total * 0.15))
-    hi = max(target, int(total * 0.30))
+    lo = max(int(min_words * 0.8), int(total * 0.06))
+    hi = max(target, int(total * 0.15))
     best, best_key, cum = None, None, 0
     for i, n in enumerate(counts):
         cum += n
