@@ -91,8 +91,22 @@ def _solve(fun, n, cap, extra=()):
         if res.success and (best is None or res.fun < best.fun):
             best = res
     w = best.x if best is not None else np.full(n, 1 / n)
+    return _clean(w, n)
+
+
+def _clean(w, n):
+    """Valid long-only weights summing to 1, or equal weights if the
+    optimiser handed back NaN/inf or nothing usable."""
+    w = np.asarray(w, dtype=float)
+    if not np.all(np.isfinite(w)):
+        return np.full(n, 1 / n)
     w = np.clip(w, 0, None)
-    return w / w.sum()
+    tot = w.sum()
+    return w / tot if tot > 0 else np.full(n, 1 / n)
+
+
+def _risk(w, cov):
+    return float(np.sqrt(max(float(w @ cov @ w), 0.0)))
 
 
 def min_vol(mu, cov, cap=None):
@@ -101,8 +115,8 @@ def min_vol(mu, cov, cap=None):
 
 def max_sharpe(mu, cov, rf, cap=None):
     def neg(w):
-        v = np.sqrt(w @ cov @ w)
-        return -(w @ mu - rf) / v if v > 0 else 0.0
+        v = _risk(w, cov)
+        return -(w @ mu - rf) / v if v > 1e-12 else 0.0
     return _solve(neg, len(mu), cap)
 
 
@@ -122,7 +136,7 @@ def frontier(mu, cov, cap=None, points=FRONTIER_POINTS):
         left -= take
         if left <= 1e-12:
             break
-    out = [(np.sqrt(w_min @ cov @ w_min) * 100, r_min * 100, w_min)]
+    out = [(_risk(w_min, cov) * 100, r_min * 100, w_min)]
     if r_max - r_min < 1e-6:
         return out
     prev = w_min
@@ -132,7 +146,9 @@ def frontier(mu, cov, cap=None, points=FRONTIER_POINTS):
         if w is None:
             continue
         prev = w
-        out.append((np.sqrt(w @ cov @ w) * 100, float(w @ mu) * 100, w))
+        r_, v_ = float(w @ mu) * 100, _risk(w, cov) * 100
+        if np.isfinite(r_) and np.isfinite(v_):
+            out.append((v_, r_, w))
     return out
 
 
@@ -141,10 +157,9 @@ def _solve_from(fun, w0, cap, extra):
     res = minimize(fun, w0, method="SLSQP", bounds=[(0, cap)] * n,
                    constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1}] + list(extra),
                    options={"ftol": 1e-12, "maxiter": 400})
-    if not res.success:
+    if not res.success or not np.all(np.isfinite(res.x)):
         return None
-    w = np.clip(res.x, 0, None)
-    return w / w.sum()
+    return _clean(res.x, n)
 
 
 def random_cloud(mu, cov, n=1500, seed=7, cap=None):
@@ -157,9 +172,10 @@ def random_cloud(mu, cov, n=1500, seed=7, cap=None):
     if cap is not None:
         w = w[(w <= max(cap, 1 / k) + 1e-9).all(axis=1)]
     w = w[rng.permutation(len(w))[:n]]
-    risk = np.sqrt(np.einsum("ij,jk,ik->i", w, cov, w)) * 100
+    risk = np.sqrt(np.clip(np.einsum("ij,jk,ik->i", w, cov, w), 0, None)) * 100
     ret = w @ mu * 100
-    return pd.DataFrame({"risk": risk, "ret": ret})
+    df = pd.DataFrame({"risk": risk, "ret": ret})
+    return df[np.isfinite(df["risk"]) & np.isfinite(df["ret"])]
 
 
 # ---------------------------------------------------------------------
@@ -209,7 +225,7 @@ def analyse_window(names, start, end, fwd_years, cap):
 
     pts = point_stats(win)
     def mix_pt(w):
-        return float(w @ mu * 100), float(np.sqrt(w @ cov @ w) * 100)
+        return float(w @ mu * 100), _risk(w, cov) * 100
 
     out = {
         "start": win.index[0], "end": win.index[-1], "months": len(win),

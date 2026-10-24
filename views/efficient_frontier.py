@@ -118,6 +118,22 @@ def _span(a, b):
     return f"{a:%b %Y} to {b:%b %Y}"
 
 
+def _finite(x):
+    """Spec with any NaN/inf replaced by null: the browser's JSON parser
+    rejects NaN, which would break the whole chart."""
+    if isinstance(x, dict):
+        return {k: _finite(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_finite(v) for v in x]
+    if isinstance(x, float) and not np.isfinite(x):
+        return None
+    return x
+
+
+def _vega(chart):
+    st.vega_lite_chart(_finite(chart.to_dict()), theme=None, width="stretch")
+
+
 def _lab(t):
     st.markdown(f"<p class='fbi-label'>{t}</p>", unsafe_allow_html=True)
 
@@ -231,7 +247,7 @@ def render():
                               help="Dashed: the frontier those years actually offered. Hollow circles: "
                               "where the best mix and the Nifty 500 landed.")
     chart = fc.frontier_chart(o, names, _label, fn, show_next and has_next)
-    st.vega_lite_chart(chart.to_dict(), theme=None, width="stretch")
+    _vega(chart)
     _note("Each faint dot is a random mix of these indices. The navy line is the frontier: no mix "
           "gives more return for its risk. Hover the line to see the mix at any point.")
 
@@ -419,8 +435,7 @@ def _next_years(o, names, fwd):
 
     _lab(f"₹1 lakh invested at the start of {o['fwd_start']:%b %Y}")
     g = {k: f[k]["growth"] for k in ("best", "low", "equal", "bench")}
-    st.vega_lite_chart(fc.growth_chart(g, ["best", "low", "equal", "bench"]).to_dict(),
-                       theme=None, width="stretch")
+    _vega(fc.growth_chart(g, ["best", "low", "equal", "bench"]))
 
 
 def _track(names_t, lookback, fwd, cap, selected_end):
@@ -444,7 +459,7 @@ def _track(names_t, lookback, fwd, cap, selected_end):
         st.markdown("<div class='ef-stat'>" + "".join(f"<div><b>{a}</b><small>{b}</small></div>" for a, b in stats)
                     + "</div>", unsafe_allow_html=True)
         _lab(f"Best mix minus Nifty 500, return a year over the next {fwd} years, by window end")
-        st.vega_lite_chart(fc.track_chart(t, selected_end).to_dict(), theme=None, width="stretch")
+        _vega(fc.track_chart(t, selected_end))
         _note(f"Windows ending {t.index[0]:%b %Y} to {t.index[-1]:%b %Y}, every three months. Neighbouring "
               f"windows share most of their months, so they are not {n} independent tests. "
               f"For comparison, the equal mix beat the Nifty 500 in {eq_beat} of {n}.")
@@ -453,7 +468,6 @@ def _track(names_t, lookback, fwd, cap, selected_end):
         _section()
         _headline("How the best mix has shifted.")
         _lab(f"Weights of the best risk-adjusted mix in each {lookback}-year window")
-        st.vega_lite_chart(fc.weights_chart(w, _label, selected_end).to_dict(),
-                           theme=None, width="stretch")
+        _vega(fc.weights_chart(w, _label, selected_end))
         _note("The dashed line marks the window chosen above. Big jumps mean the 'best' mix depended "
               "heavily on which years you happened to look at.")

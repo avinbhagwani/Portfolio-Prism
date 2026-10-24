@@ -9,6 +9,7 @@ Colours carry one meaning everywhere on the page:
 """
 
 import altair as alt
+import numpy as np
 import pandas as pd
 
 from charts import fbi_vega as fv  # registers and enables the house theme
@@ -34,6 +35,9 @@ PCT = "format(datum.value, '.0f') + '%'"
 
 
 def _domain(vals, pad_frac=0.08, min_pad=1.0):
+    vals = [float(v) for v in vals if v is not None and np.isfinite(v)]
+    if not vals:
+        return [0.0, 30.0]
     lo, hi = min(vals), max(vals)
     pad = max((hi - lo) * pad_frac, min_pad)
     return [float(lo - pad), float(hi + pad)]
