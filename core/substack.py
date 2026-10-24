@@ -217,25 +217,99 @@ def _top_level_blocks(body):
     return [body[a:b] for a, b in s.ends if b > a]
 
 
-def preview(body, share=0.33, min_words=120):
+_TEASE = re.compile(
+    r"\b(but|yet|except|until|instead|turns out|here'?s (what|why|how|the)|"
+    r"the (answer|catch|twist|problem|real|truth)|surpris\w*|nobody|no one|"
+    r"what happened|the question|why\b)", re.I)
+_HEADING = re.compile(r"^\s*<h[1-6]\b", re.I)
+_VISUAL = re.compile(r"<(img|figure|picture|iframe|svg)\b|captioned-image|image-link", re.I)
+_LIST = re.compile(r"^\s*<(ul|ol)\b", re.I)
+
+
+def _last_sentence(text):
+    parts = re.split(r"(?<=[.!?])\s+", text.strip())
+    return parts[-1] if parts else ""
+
+
+def _hook_score(block, text, next_block):
+    """How much a reader wants to keep going if the preview stops after
+    this block. Rewards open questions, set-ups ("Here's what I found:"),
+    a turn ("But..."), and stopping just before a chart or a new section."""
+    if not text:
+        return None
+    is_heading = bool(_HEADING.match(block))
+    end = text.rstrip(" \u201d\"')*")
+    score = 0.0
+    if end.endswith("?"):
+        score += 4.0 if is_heading else 3.0     # a question the next part answers
+    elif is_heading:
+        return None                              # never stop on a plain heading
+    if end.endswith(":"):
+        score += 3.0                             # the reveal is the next block
+    if end.endswith(("\u2026", "...")):
+        score += 1.5
+    if _TEASE.search(_last_sentence(text)):
+        score += 1.5                             # a turn or a promise
+    if len(text.split()) <= 30:
+        score += 1.0                             # short, punchy line
+    if next_block is not None:
+        if _HEADING.match(next_block):
+            score += 2.0                         # a new section is about to start
+        elif _VISUAL.search(next_block):
+            score += 2.0                         # the chart is about to appear
+        elif _LIST.match(next_block):
+            score += 1.0
+    if _LIST.match(block):
+        score -= 1.0                             # lists rarely end on tension
+    return score
+
+
+def preview(body, share=0.25, min_words=100):
     """
-    The opening of an article: whole top-level blocks until about `share`
-    of the words (at least `min_words`), always ending on a text block.
-    Returns (preview_html, remaining_words); remaining_words is 0 when the
-    article is short enough to show in full.
+    The opening of an article, ending on a hook so readers want the rest.
+
+    Looks for whole top-level blocks ending somewhere between about 15% and
+    30% of the words (a bit earlier than a plain third), scores every
+    possible stopping point by how much it leaves the reader hanging, and
+    stops at the best one. Returns (preview_html, remaining_words);
+    remaining_words is 0 when the article is short enough to show in full.
     """
     blocks = _top_level_blocks(body) or [body]
-    counts = [len(_strip_tags(b).split()) for b in blocks]
+    texts = [_strip_tags(b) for b in blocks]
+    counts = [len(t.split()) for t in texts]
     total = sum(counts)
     target = max(min_words, int(total * share))
     if total <= target * 1.4:
         return body, 0
-    taken, words = [], 0
-    for block, n in zip(blocks, counts):
-        taken.append(block)
-        words += n
-        if words >= target and n > 0:
+
+    lo = max(int(min_words * 0.8), int(total * 0.15))
+    hi = max(target, int(total * 0.30))
+    best, best_key, cum = None, None, 0
+    for i, n in enumerate(counts):
+        cum += n
+        if cum > hi:
             break
-    while taken and len(_strip_tags(taken[-1]).split()) == 0:
-        taken.pop()
-    return "".join(taken), max(0, total - words)
+        if cum < lo:
+            continue
+        nxt = blocks[i + 1] if i + 1 < len(blocks) else None
+        score = _hook_score(blocks[i], texts[i], nxt)
+        if score is None:
+            continue
+        score -= 1.5 * abs(cum - target) / target  # mild pull toward the target
+        key = (score, -abs(cum - target))
+        if best_key is None or key > best_key:
+            best, best_key = (i, cum), key
+
+    if best is None:  # no text block in the window: fall back to the target
+        cum = 0
+        for i, n in enumerate(counts):
+            cum += n
+            if cum >= target and n > 0:
+                break
+        while i > 0 and counts[i] == 0:
+            cum -= counts[i]
+            i -= 1
+        best = (i, cum)
+
+    i, words = best
+    return "".join(blocks[: i + 1]), max(0, total - words)
