@@ -1,7 +1,7 @@
 """
 PRISM's left navigation: a navy panel with the wordmark and byline,
 pages grouped into sections (each with an icon tile and a one-line
-description), a clear active state, a "coming soon" item, and a footer
+description), a clear active state, and a footer
 with contact details pinned to the bottom.
 
 Links are st.page_link, so moving between pages is instant and keeps
@@ -24,6 +24,8 @@ SECTIONS = [
          "Compare factor indices"),
         ("drawdown-analysis", "Drawdown Analysis", ":material/trending_down:",
          "Falls and recoveries"),
+        ("efficient-frontier", "Efficient Frontier", ":material/scatter_plot:",
+         "Best risk-return mix"),
     ]),
     ("Games", [
         ("try-to-time", "Try to Time", ":material/sports_esports:",
@@ -35,12 +37,8 @@ SECTIONS = [
         ("writing", "Writing", ":material/edit_note:",
          "My Substack"),
     ]),
-    ("Coming soon", [
-        ("efficient-frontier", "Efficient Frontier", ":material/scatter_plot:",
-         "Best risk-return mix"),
-    ]),
 ]
-DISABLED = {"efficient-frontier"}
+DISABLED = set()
 
 BASE_CSS = """
 <style>

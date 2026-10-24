@@ -9,8 +9,7 @@ Home: what PRISM is, in as few words as possible.
             and stardust orbits the cursor. Drifts by itself when idle.
   Numbers   a strip of live facts from the data
   Lenses    one card per tool, each showing its own animation
-  Soon      what's coming (retirement planning, portfolio attribution,
-            efficient frontier)
+  Soon      what's coming (retirement planning, portfolio attribution)
   Writing   the latest Substack article
 
 The interactive prism is static/home-prism.html in an st.iframe,
@@ -38,12 +37,13 @@ LENSES = [
      "Compare Nifty factor indices on return, risk and consistency."),
     ("drawdown-analysis", "Drawdown Analysis", "anim-drawdown-analysis.svg",
      "How far an index fell, and how long it took to recover."),
+    ("efficient-frontier", "Efficient Frontier", "anim-efficient-frontier.svg",
+     "The best mix of indices for the risk, and whether it lasted."),
 ]
 
 SOON = [
     ("Retirement planning", "Will the money last? Plan income for every stage."),
     ("Portfolio attribution", "Which decisions added return, and which cost it."),
-    ("Efficient frontier", "The best mix for the risk you can take."),
 ]
 
 CSS = """
