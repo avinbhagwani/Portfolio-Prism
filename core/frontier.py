@@ -6,7 +6,8 @@ Conventions (shown on the page so the numbers can be checked):
   * Month-end total return levels, cut at the last complete month.
   * Expected return = average monthly return x 12; risk = monthly
     standard deviation x sqrt(12). Both annualised, in %.
-  * Long only, fully invested, optional cap on any one index.
+  * Long only, fully invested, with an optional cap on any one index
+    and an optional minimum in every index (limits = (floor, cap)).
   * "Best risk-adjusted mix" = highest Sharpe ratio, using the Nifty 1D
     Rate index over the same window as the risk-free rate (a flat 6.5%
     a year before that index starts in 2011).
@@ -78,29 +79,38 @@ def rf_rate(rf):
     return RF_FALLBACK / 100
 
 
-def _solve(fun, n, cap, extra=()):
-    cap = 1.0 if cap is None else max(cap, 1.0 / n + 1e-9)
+def bounds(n, limits=None):
+    """(lo, hi) per-index weight bounds that are always feasible: the cap
+    is at least 1/n and the floor at most 1/n, so weights can sum to 1."""
+    floor, cap = limits if limits else (None, None)
+    hi = 1.0 if cap is None else max(float(cap), 1.0 / n)
+    lo = 0.0 if floor is None else min(float(floor), 1.0 / n)
+    return lo, hi
+
+
+def _solve(fun, n, limits, extra=()):
+    lo, hi = bounds(n, limits)
     cons = [{"type": "eq", "fun": lambda w: w.sum() - 1}] + list(extra)
     best = None
     starts = [np.full(n, 1 / n)] + [np.eye(n)[i] * 0.5 + 0.5 / n for i in range(min(n, 3))]
     for w0 in starts:
-        w0 = np.clip(w0, 0, cap)
+        w0 = np.clip(w0, lo, hi)
         w0 = w0 / w0.sum()
-        res = minimize(fun, w0, method="SLSQP", bounds=[(0, cap)] * n,
+        res = minimize(fun, w0, method="SLSQP", bounds=[(lo, hi)] * n,
                        constraints=cons, options={"ftol": 1e-10, "maxiter": 400})
-        if res.success and (best is None or res.fun < best.fun):
+        if res.success and np.all(np.isfinite(res.x)) and (best is None or res.fun < best.fun):
             best = res
     w = best.x if best is not None else np.full(n, 1 / n)
-    return _clean(w, n)
+    return _clean(w, n, lo, hi)
 
 
-def _clean(w, n):
-    """Valid long-only weights summing to 1, or equal weights if the
+def _clean(w, n, lo=0.0, hi=1.0):
+    """Valid weights within [lo, hi] summing to 1, or equal weights if the
     optimiser handed back NaN/inf or nothing usable."""
     w = np.asarray(w, dtype=float)
     if not np.all(np.isfinite(w)):
         return np.full(n, 1 / n)
-    w = np.clip(w, 0, None)
+    w = np.clip(w, lo, hi)
     tot = w.sum()
     return w / tot if tot > 0 else np.full(n, 1 / n)
 
@@ -109,40 +119,43 @@ def _risk(w, cov):
     return float(np.sqrt(max(float(w @ cov @ w), 0.0)))
 
 
-def min_vol(mu, cov, cap=None):
-    return _solve(lambda w: w @ cov @ w, len(mu), cap)
+def min_vol(mu, cov, limits=None):
+    return _solve(lambda w: w @ cov @ w, len(mu), limits)
 
 
-def max_sharpe(mu, cov, rf, cap=None):
+def max_sharpe(mu, cov, rf, limits=None):
     def neg(w):
         v = _risk(w, cov)
         return -(w @ mu - rf) / v if v > 1e-12 else 0.0
-    return _solve(neg, len(mu), cap)
+    return _solve(neg, len(mu), limits)
 
 
-def frontier(mu, cov, cap=None, points=FRONTIER_POINTS):
-    """Efficient (upper) half of the long-only frontier: list of
+def frontier(mu, cov, limits=None, points=FRONTIER_POINTS):
+    """Efficient (upper) half of the frontier within the limits: list of
     (risk %, return %, weights) from the min-vol mix to the highest
     reachable return."""
     n = len(mu)
-    w_min = min_vol(mu, cov, cap)
+    lo, hi = bounds(n, limits)
+    w_min = min_vol(mu, cov, limits)
     r_min = float(w_min @ mu)
-    # highest return reachable under the cap: fill the best assets first
-    c = 1.0 if cap is None else max(cap, 1.0 / n)
-    left, r_max = 1.0, 0.0
+    # highest return reachable: the floor in everything, then fill the
+    # best indices up to the cap with what is left
+    w_top = np.full(n, lo)
+    left = 1.0 - lo * n
     for i in np.argsort(-mu):
-        take = min(c, left)
-        r_max += take * mu[i]
+        take = min(hi - lo, left)
+        w_top[i] += take
         left -= take
         if left <= 1e-12:
             break
+    r_max = float(w_top @ mu)
     out = [(_risk(w_min, cov) * 100, r_min * 100, w_min)]
     if r_max - r_min < 1e-6:
         return out
     prev = w_min
     for t in np.linspace(r_min, r_max, points)[1:]:
         cons = [{"type": "eq", "fun": lambda w, t=t: w @ mu - t}]
-        w = _solve_from(lambda w: w @ cov @ w, prev, c, cons)
+        w = _solve_from(lambda w: w @ cov @ w, prev, lo, hi, cons)
         if w is None:
             continue
         prev = w
@@ -152,25 +165,28 @@ def frontier(mu, cov, cap=None, points=FRONTIER_POINTS):
     return out
 
 
-def _solve_from(fun, w0, cap, extra):
+def _solve_from(fun, w0, lo, hi, extra):
     n = len(w0)
-    res = minimize(fun, w0, method="SLSQP", bounds=[(0, cap)] * n,
+    res = minimize(fun, w0, method="SLSQP", bounds=[(lo, hi)] * n,
                    constraints=[{"type": "eq", "fun": lambda w: w.sum() - 1}] + list(extra),
                    options={"ftol": 1e-12, "maxiter": 400})
     if not res.success or not np.all(np.isfinite(res.x)):
         return None
-    return _clean(res.x, n)
+    return _clean(res.x, n, lo, hi)
 
 
-def random_cloud(mu, cov, n=1500, seed=7, cap=None):
-    """Random long-only mixes, for a faint 'everything you could hold'
-    backdrop. Mixes of concentrated and spread-out weights, kept within
-    the cap so the cloud never shows mixes the frontier isn't allowed."""
+def random_cloud(mu, cov, n=1500, seed=7, limits=None):
+    """Random mixes for a faint 'everything you could hold' backdrop:
+    concentrated and spread-out weights, kept within the limits so the
+    cloud never shows mixes the frontier isn't allowed."""
     rng = np.random.default_rng(seed)
     k = len(mu)
-    w = np.vstack([rng.dirichlet(np.full(k, a), n * 4) for a in (0.25, 1.0, 4.0)])
-    if cap is not None:
-        w = w[(w <= max(cap, 1 / k) + 1e-9).all(axis=1)]
+    lo, hi = bounds(k, limits)
+    raw = np.vstack([rng.dirichlet(np.full(k, a), n * 4) for a in (0.25, 1.0, 4.0)])
+    w = lo + (1 - lo * k) * raw          # every mix keeps the floor
+    w = w[(w <= hi + 1e-9).all(axis=1)]
+    if len(w) == 0:
+        w = np.full((1, k), 1 / k)
     w = w[rng.permutation(len(w))[:n]]
     risk = np.sqrt(np.clip(np.einsum("ij,jk,ik->i", w, cov, w), 0, None)) * 100
     ret = w @ mu * 100
@@ -208,7 +224,7 @@ def realised(m, rf_m=None):
 
 
 @st.cache_data(show_spinner=False, max_entries=200)
-def analyse_window(names, start, end, fwd_years, cap):
+def analyse_window(names, start, end, fwd_years, limits):
     """Everything the page shows for one look-back window [start, end]
     and the fwd_years that follow it (as far as data goes)."""
     rets, rf = monthly_returns(names)
@@ -218,9 +234,9 @@ def analyse_window(names, start, end, fwd_years, cap):
     mu, cov = moments(asset)
     rf_ann = rf_rate(rf.loc[win.index])
 
-    fr = frontier(mu, cov, cap)
-    w_best = max_sharpe(mu, cov, rf_ann, cap)
-    w_low = min_vol(mu, cov, cap)
+    fr = frontier(mu, cov, limits)
+    w_best = max_sharpe(mu, cov, rf_ann, limits)
+    w_low = min_vol(mu, cov, limits)
     w_eq = np.full(len(names), 1 / len(names))
 
     pts = point_stats(win)
@@ -233,7 +249,7 @@ def analyse_window(names, start, end, fwd_years, cap):
         "frontier": pd.DataFrame([{"risk": a, "ret": b} for a, b, _ in fr]),
         "frontier_w": [w for *_, w in fr],
         "points": pts,
-        "cloud": random_cloud(mu, cov, cap=cap),
+        "cloud": random_cloud(mu, cov, limits=limits),
         "weights": {"best": w_best, "low": w_low, "equal": w_eq},
         "mix": {k: mix_pt(w) for k, w in (("best", w_best), ("low", w_low), ("equal", w_eq))},
         "sharpe_in": {},
@@ -265,11 +281,14 @@ def analyse_window(names, start, end, fwd_years, cap):
                          for k, w in out["weights"].items()}
         out["landed"]["bench"] = (float(after[BENCHMARK].mean() * 1200),
                                   float(after[BENCHMARK].std() * np.sqrt(12) * 100))
+        # the map of those years: every index where it actually ended up,
+        # the mixes you could have held, and (with 2+ years) the frontier
+        mu2, cov2 = moments(fa)
+        out["fwd_points"] = point_stats(after)
+        out["fwd_cloud"] = random_cloud(mu2, cov2, limits=limits)
         if len(after) >= 24:
-            mu2, cov2 = moments(fa)
             out["fwd_frontier"] = pd.DataFrame(
-                [{"risk": a, "ret": b} for a, b, _ in frontier(mu2, cov2, cap, points=25)])
-            out["fwd_points"] = point_stats(after)
+                [{"risk": a, "ret": b} for a, b, _ in frontier(mu2, cov2, limits, points=25)])
     return out
 
 
@@ -278,7 +297,7 @@ def analyse_window(names, start, end, fwd_years, cap):
 # ---------------------------------------------------------------------
 
 @st.cache_data(show_spinner=False, max_entries=60)
-def track_record(names, lookback_years, fwd_years, cap):
+def track_record(names, lookback_years, fwd_years, limits):
     """For every quarterly window end: the best and lowest-risk mixes
     from the look-back, and (where the future is in the data) how they
     did over the next fwd_years against the Nifty 500 and an equal mix."""
@@ -290,8 +309,8 @@ def track_record(names, lookback_years, fwd_years, cap):
         i = rets.index.get_loc(end)
         win = rets.iloc[i - n_back + 1: i + 1]
         mu, cov = moments(win[names])
-        w_best = max_sharpe(mu, cov, rf_rate(rf.loc[win.index]), cap)
-        w_low = min_vol(mu, cov, cap)
+        w_best = max_sharpe(mu, cov, rf_rate(rf.loc[win.index]), limits)
+        w_low = min_vol(mu, cov, limits)
         weights.append({"end": end, **dict(zip(names, w_best))})
         after = rets.iloc[i + 1: i + 1 + n_fwd]
         if len(after) < n_fwd:
