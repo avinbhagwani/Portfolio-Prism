@@ -27,6 +27,8 @@ NEG = "#C9573C"
 MIX_COLORS = {"best": RUST, "low": GOLD, "equal": TEAL, "bench": GREY}
 MIX_NAMES = {"best": "Best risk-adjusted mix", "low": "Lowest-risk mix",
              "equal": "Equal mix", "bench": "Nifty 500"}
+# shorter on-chart labels, so they fit when two charts sit side by side
+SHORT_NAMES = {"best": "Best mix", "low": "Lowest risk", "equal": "Equal mix"}
 # index colours for weights; kept clear of the rust, gold and teal used for the mixes
 WEIGHT_COLORS = ["#1F4E79", "#8E5B9F", "#5E9A62", "#6C8EBF", "#C77DA6",
                  "#9A8B3C", "#3F6E5A", "#B08BC8", "#5F6B78", "#A7C4DE"]
@@ -43,123 +45,173 @@ def _domain(vals, pad_frac=0.08, min_pad=1.0):
     return [float(lo - pad), float(hi + pad)]
 
 
-def frontier_chart(o, names, label, weight_text, show_next):
-    """The frontier for one window: a faint cloud of random mixes, the
-    frontier, every index, the Nifty 500, the two optimised mixes and,
-    if show_next, where they landed over the following years and the
-    frontier those years actually offered (dashed)."""
+STAR = ("M0,-1.1L0.32,-0.32L1.1,-0.32L0.48,0.15L0.7,0.95L0,0.47L-0.7,0.95"
+        "L-0.48,0.15L-1.1,-0.32L-0.32,-0.32Z")
+
+
+def shared_domains(o, names, with_next):
+    """One pair of axis ranges for the look-back and next-years charts, so
+    a point that moves between them moves on screen by the same amount."""
+    pts = o["points"]
+    xs = list(o["cloud"]["risk"].quantile([0.0, 1.0])) + list(pts.loc[names + ["NIFTY 500"], "risk"]) \
+        + list(o["frontier"]["risk"])
+    ys = list(o["cloud"]["ret"].quantile([0.0, 1.0])) + list(pts.loc[names + ["NIFTY 500"], "ret"]) \
+        + list(o["frontier"]["ret"])
+    if with_next and "fwd_points" in o:
+        fp = o["fwd_points"]
+        xs += list(fp.loc[names + ["NIFTY 500"], "risk"]) + list(o["fwd_cloud"]["risk"].quantile([0.0, 1.0]))
+        ys += list(fp.loc[names + ["NIFTY 500"], "ret"]) + list(o["fwd_cloud"]["ret"].quantile([0.0, 1.0]))
+        xs += [v[1] for v in o["landed"].values()]
+        ys += [v[0] for v in o["landed"].values()]
+        if "fwd_frontier" in o:
+            xs += list(o["fwd_frontier"]["risk"])
+            ys += list(o["fwd_frontier"]["ret"])
+    return _domain(xs), _domain(ys, min_pad=1.5)
+
+
+def _axes(xd, yd, show_y=True):
+    x = alt.X("risk:Q", title="Risk (volatility a year)",
+              scale=alt.Scale(domain=xd, nice=False, zero=False),
+              axis=alt.Axis(labelExpr=PCT, grid=True, tickMinStep=1))
+    y = alt.Y("ret:Q", title="Average return a year" if show_y else None,
+              scale=alt.Scale(domain=yd, nice=False, zero=False),
+              axis=alt.Axis(labelExpr=PCT, tickMinStep=1))
+    return x, y
+
+
+def _tip(extra=()):
+    return [alt.Tooltip("name:N", title=" "),
+            alt.Tooltip("ret:Q", title="Return a year %", format=".1f"),
+            alt.Tooltip("risk:Q", title="Risk %", format=".1f")] + list(extra)
+
+
+def _index_layers(pts, names, label, x, y, skip=()):
+    idx = pd.DataFrame({"risk": pts.loc[names, "risk"].values, "ret": pts.loc[names, "ret"].values,
+                        "name": [label(n) for n in names]})
+    b = pts.loc["NIFTY 500"]
+    bdf = pd.DataFrame([{"name": "Nifty 500", "ret": b["ret"], "risk": b["risk"]}])
+    return [
+        alt.Chart(idx).mark_circle(size=70, color=SLATE, opacity=0.9).encode(x=x, y=y, tooltip=_tip()),
+        alt.Chart(idx[~idx["name"].isin(skip)]).mark_text(
+            align="left", dx=8, dy=-1, fontSize=11.5, color=SLATE).encode(x=x, y=y, text="name:N"),
+        alt.Chart(bdf).mark_point(shape="diamond", filled=True, size=170, color=GREY, opacity=1).encode(
+            x=x, y=y, tooltip=_tip()),
+        alt.Chart(bdf).mark_text(align="left", dx=10, dy=1, fontSize=12, fontWeight=600,
+                                 color="#5F6873").encode(x=x, y=y, text="name:N"),
+    ]
+
+
+def _mix_labels(df, x, y, xd):
+    """Mix names placed beside their star, on whichever side of the chart
+    has room: labels in the right half go to the left of the mark."""
+    mid = (xd[0] + xd[1]) / 2
+    out = []
+    for k, dy in (("best", -13), ("low", 17), ("equal", 15)):
+        row = df[df["key"] == k]
+        if row.empty:
+            continue
+        right_half = float(row["risk"].iloc[0]) > mid
+        out.append(alt.Chart(row).mark_text(
+            align="right" if right_half else "left", dx=-13 if right_half else 13, dy=dy,
+            fontSize=12, fontWeight=600).encode(
+            x=x, y=y, text="label:N", color=alt.Color("color:N", scale=None)))
+    return out
+
+
+def frontier_chart(o, names, label, weight_text, xd, yd, height=470):
+    """The look-back window: a faint cloud of random mixes, the frontier,
+    every index, the Nifty 500 and the two optimised mixes (stars)."""
     pts = o["points"]
     fr = o["frontier"].copy()
     fr["mix"] = weight_text(o["frontier_w"])
-    nxt = show_next and "landed" in o
+    x, y = _axes(xd, yd)
 
-    idx = pd.DataFrame({
-        "risk": pts.loc[names, "risk"].values, "ret": pts.loc[names, "ret"].values,
-        "name": [label(n) for n in names]})
     # an index the best or lowest-risk mix sits on is named in that mix's label instead
     on_mix = {}
     for k in ("best", "low"):
         r, v = o["mix"][k]
-        hit = idx[((idx["ret"] - r).abs() < 0.15) & ((idx["risk"] - v).abs() < 0.15)]
-        if len(hit):
-            on_mix[k] = hit["name"].iloc[0]
-    idx_lab = idx[~idx["name"].isin(on_mix.values())]
-    bench = pts.loc["NIFTY 500"]
+        for n in names:
+            if abs(pts.loc[n, "ret"] - r) < 0.15 and abs(pts.loc[n, "risk"] - v) < 0.15:
+                on_mix[k] = label(n)
     mixes = pd.DataFrame([
-        {"key": k, "name": MIX_NAMES[k] + (f" · all {on_mix[k]}" if k in on_mix else ""), "ret": o["mix"][k][0], "risk": o["mix"][k][1],
-         "color": MIX_COLORS[k], "mix": weight_text([o["weights"][k]])[0]}
+        {"key": k, "name": MIX_NAMES[k], "label": SHORT_NAMES[k] + (f" · {on_mix[k]}" if k in on_mix else ""),
+         "ret": o["mix"][k][0], "risk": o["mix"][k][1], "color": MIX_COLORS[k],
+         "mix": weight_text([o["weights"][k]])[0]}
         for k in ("best", "low")])
-    bdf = pd.DataFrame([{"name": "Nifty 500", "ret": bench["ret"], "risk": bench["risk"]}])
-
-    xs = list(o["cloud"]["risk"].quantile([0.0, 1.0])) + list(idx["risk"]) + [bench["risk"]] + list(fr["risk"])
-    ys = list(o["cloud"]["ret"].quantile([0.0, 1.0])) + list(idx["ret"]) + [bench["ret"]] + list(fr["ret"])
-    if nxt:
-        land = pd.DataFrame([
-            {"key": k, "name": MIX_NAMES[k] + " · next", "ret": v[0], "risk": v[1],
-             "ret0": (o["mix"][k][0] if k != "bench" else bench["ret"]),
-             "risk0": (o["mix"][k][1] if k != "bench" else bench["risk"]),
-             "color": MIX_COLORS[k]}
-            for k, v in o["landed"].items() if k in ("best", "bench")])
-        xs += list(land["risk"])
-        ys += list(land["ret"])
-        if "fwd_frontier" in o:
-            xs += list(o["fwd_frontier"]["risk"])
-            ys += list(o["fwd_frontier"]["ret"])
-    xd, yd = _domain(xs), _domain(ys, min_pad=1.5)
-
-    x = alt.X("risk:Q", title="Risk (volatility a year)",
-              scale=alt.Scale(domain=xd, nice=False, zero=False),
-              axis=alt.Axis(labelExpr=PCT, grid=True, tickMinStep=1))
-    y = alt.Y("ret:Q", title="Average return a year",
-              scale=alt.Scale(domain=yd, nice=False, zero=False),
-              axis=alt.Axis(labelExpr=PCT, tickMinStep=1))
-    tip_pt = [alt.Tooltip("name:N", title=" "),
-              alt.Tooltip("ret:Q", title="Return a year %", format=".1f"),
-              alt.Tooltip("risk:Q", title="Risk %", format=".1f")]
-
-    cloud = alt.Chart(o["cloud"]).mark_circle(size=9, color=CLOUD, opacity=0.45).encode(x=x, y=y)
-    layers = [cloud]
-
-    if nxt and "fwd_frontier" in o:
-        nf = o["fwd_frontier"].copy()
-        layers.append(alt.Chart(nf).mark_line(color=NAVY, strokeDash=[5, 4], strokeWidth=1.6,
-                                              opacity=0.55, interpolate="monotone").encode(
-            x=x, y=y, order="risk:Q"))
-        end = nf.iloc[-1:]
-        layers.append(alt.Chart(end.assign(t="Frontier the next years offered")).mark_text(
-            align="left", dx=6, dy=10, fontSize=11, color=NAVY, opacity=0.75).encode(x=x, y=y, text="t:N"))
 
     hover = alt.selection_point(on="pointerover", nearest=True, fields=["risk"],
                                 empty=False, clear="pointerout")
-    line = alt.Chart(fr).mark_line(color=NAVY, strokeWidth=3, interpolate="monotone").encode(
-        x=x, y=y, order="risk:Q")
-    fr_pts = alt.Chart(fr).mark_circle(size=70, color=NAVY).encode(
-        x=x, y=y,
-        opacity=alt.condition(hover, alt.value(1), alt.value(0)),
-        tooltip=[alt.Tooltip("ret:Q", title="Return a year %", format=".1f"),
-                 alt.Tooltip("risk:Q", title="Risk %", format=".1f"),
-                 alt.Tooltip("mix:N", title="Mix")],
-    ).add_params(hover)
-    layers += [line, fr_pts]
-
-    layers.append(alt.Chart(idx).mark_circle(size=70, color=SLATE, opacity=0.9).encode(
-        x=x, y=y, tooltip=tip_pt))
-    layers.append(alt.Chart(idx_lab).mark_text(align="left", dx=8, dy=-1, fontSize=11.5,
-                                           color=SLATE).encode(x=x, y=y, text="name:N"))
-    layers.append(alt.Chart(bdf).mark_point(shape="diamond", filled=True, size=170,
-                                            color=GREY, opacity=1).encode(x=x, y=y, tooltip=tip_pt))
-    layers.append(alt.Chart(bdf).mark_text(align="left", dx=10, dy=1, fontSize=12, fontWeight=600,
-                                           color="#5F6873").encode(x=x, y=y, text="name:N"))
-
-    if nxt:
-        land = land.copy()
-        seg = pd.DataFrame({"risk": land["risk0"], "ret": land["ret0"],
-                            "risk2": land["risk"], "ret2": land["ret"], "color": land["color"]})
-        layers.append(alt.Chart(seg).mark_rule(strokeDash=[2, 3], strokeWidth=1.4, opacity=0.8).encode(
-            x=x, y=y, x2="risk2:Q", y2="ret2:Q", color=alt.Color("color:N", scale=None)))
-        layers.append(alt.Chart(land).mark_point(shape="circle", filled=False, size=170,
-                                                 strokeWidth=2.2, opacity=1).encode(
-            x=x, y=y, color=alt.Color("color:N", scale=None),
-            tooltip=[alt.Tooltip("name:N", title=" "),
-                     alt.Tooltip("ret:Q", title="Return a year %", format=".1f"),
-                     alt.Tooltip("risk:Q", title="Risk %", format=".1f")]))
-        layers.append(alt.Chart(land[land["key"] == "best"].assign(t="where it landed")).mark_text(
-            align="left", dx=11, dy=12, fontSize=11, fontStyle="italic", color=RUST).encode(
-            x=x, y=y, text="t:N"))
-
-    layers.append(alt.Chart(mixes).mark_point(shape="M0,-1.1L0.32,-0.32L1.1,-0.32L0.48,0.15L0.7,0.95L0,0.47L-0.7,0.95L-0.48,0.15L-1.1,-0.32L-0.32,-0.32Z",
-                                              filled=True, size=420, opacity=1, strokeWidth=0).encode(
+    layers = [
+        alt.Chart(o["cloud"]).mark_circle(size=9, color=CLOUD, opacity=0.45).encode(x=x, y=y),
+        alt.Chart(fr).mark_line(color=NAVY, strokeWidth=3, interpolate="monotone").encode(
+            x=x, y=y, order="risk:Q"),
+        alt.Chart(fr).mark_circle(size=70, color=NAVY).encode(
+            x=x, y=y, opacity=alt.condition(hover, alt.value(1), alt.value(0)),
+            tooltip=[alt.Tooltip("ret:Q", title="Return a year %", format=".1f"),
+                     alt.Tooltip("risk:Q", title="Risk %", format=".1f"),
+                     alt.Tooltip("mix:N", title="Mix")]).add_params(hover),
+    ]
+    layers += _index_layers(pts, names, label, x, y, skip=set(on_mix.values()))
+    layers.append(alt.Chart(mixes).mark_point(shape=STAR, filled=True, size=420, opacity=1,
+                                              strokeWidth=0).encode(
         x=x, y=y, color=alt.Color("color:N", scale=None),
-        tooltip=[alt.Tooltip("name:N", title=" "),
-                 alt.Tooltip("ret:Q", title="Return a year %", format=".1f"),
-                 alt.Tooltip("risk:Q", title="Risk %", format=".1f"),
-                 alt.Tooltip("mix:N", title="Mix")]))
-    for k, align, dx, dy in (("best", "right", -14, -12), ("low", "right", -12, 18)):
-        layers.append(alt.Chart(mixes[mixes["key"] == k]).mark_text(
-            align=align, dx=dx, dy=dy, fontSize=12.5, fontWeight=600).encode(
-            x=x, y=y, text="name:N", color=alt.Color("color:N", scale=None)))
+        tooltip=_tip([alt.Tooltip("mix:N", title="Mix")])))
+    layers += _mix_labels(mixes, x, y, xd)
+    return alt.layer(*layers).properties(width="container", height=height)
 
-    return alt.layer(*layers).properties(width="container", height=470)
+
+def next_chart(o, names, label, xd, yd, height=470):
+    """The years after the window, on the same axes: where every index and
+    mix actually ended up. Each mix is drawn twice, a faint hollow star
+    where the look-back put it and a solid star where it landed, joined by
+    a line, so the gap between promise and result is visible at a glance.
+    The look-back frontier is kept as a faint dashed reference."""
+    x, y = _axes(xd, yd, show_y=False)
+    fp = o["fwd_points"]
+    layers = [alt.Chart(o["fwd_cloud"]).mark_circle(size=9, color=CLOUD, opacity=0.45).encode(x=x, y=y)]
+
+    old = o["frontier"]
+    layers.append(alt.Chart(old).mark_line(color=GREY, strokeDash=[4, 4], strokeWidth=1.6, opacity=0.7,
+                                           interpolate="monotone").encode(x=x, y=y, order="risk:Q"))
+    layers.append(alt.Chart(old.iloc[-1:].assign(t="look-back frontier")).mark_text(
+        align="right", dx=-4, dy=-9, fontSize=11, fontStyle="italic", color=GREY).encode(
+        x=x, y=y, text="t:N"))
+    if "fwd_frontier" in o:
+        layers.append(alt.Chart(o["fwd_frontier"]).mark_line(
+            color=NAVY, strokeWidth=3, interpolate="monotone").encode(x=x, y=y, order="risk:Q"))
+
+    layers += _index_layers(fp, names, label, x, y)
+
+    keys = ["best", "low", "equal"]
+    rows = []
+    for k in keys:
+        r0, v0 = o["mix"][k]
+        r1, v1 = o["landed"][k]
+        rows.append({"key": k, "name": MIX_NAMES[k], "color": MIX_COLORS[k],
+                     "ret0": r0, "risk0": v0, "ret": r1, "risk": v1,
+                     "promised": f"{r0:.1f}% at {v0:.1f}% risk", "got": f"{r1:.1f}% at {v1:.1f}% risk"})
+    mv = pd.DataFrame(rows)
+    opt = mv[mv["key"] != "equal"]
+    ghost = pd.DataFrame({"risk": opt["risk0"], "ret": opt["ret0"], "color": opt["color"]})
+    seg = pd.DataFrame({"risk": opt["risk0"], "ret": opt["ret0"], "risk2": opt["risk"],
+                        "ret2": opt["ret"], "color": opt["color"]})
+    layers.append(alt.Chart(seg).mark_rule(strokeWidth=1.8, opacity=0.75, strokeDash=[1, 3],
+                                           strokeCap="round").encode(
+        x=x, y=y, x2="risk2:Q", y2="ret2:Q", color=alt.Color("color:N", scale=None)))
+    layers.append(alt.Chart(ghost).mark_point(shape=STAR, filled=False, size=360, strokeWidth=1.6,
+                                              opacity=0.6).encode(
+        x=x, y=y, color=alt.Color("color:N", scale=None)))
+    tip = [alt.Tooltip("name:N", title=" "), alt.Tooltip("promised:N", title="Look-back said"),
+           alt.Tooltip("got:N", title="Next years gave")]
+    layers.append(alt.Chart(opt).mark_point(shape=STAR, filled=True, size=420, opacity=1,
+                                            strokeWidth=0).encode(
+        x=x, y=y, color=alt.Color("color:N", scale=None), tooltip=tip))
+    eq = mv[mv["key"] == "equal"]
+    layers.append(alt.Chart(eq).mark_circle(size=150, opacity=1).encode(
+        x=x, y=y, color=alt.Color("color:N", scale=None), tooltip=tip))
+    mv["label"] = mv["key"].map(SHORT_NAMES)
+    layers += _mix_labels(mv, x, y, xd)
+    return alt.layer(*layers).properties(width="container", height=height)
 
 
 def growth_chart(series, order):

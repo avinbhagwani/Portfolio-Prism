@@ -6,11 +6,12 @@ the years that followed?
   Controls   the set (Nifty 500 factor indices by default, or a custom
              set of up to 10 indices), a look-back (3/5/7/10 years, Max
              or a custom date range), how many years to test on, an
-             optional cap per index, and a slider that moves the
+             optional max and min per index, and a slider that moves the
              look-back window through history
   Headline   the best risk-adjusted mix for that window vs the Nifty 500
-  Chart      the frontier, every index, the Nifty 500, the best and
-             lowest-risk mixes, and where they landed next (dashed)
+  Charts     the look-back frontier with the best and lowest-risk mixes,
+             and beside it the next years on the same axes: where every
+             index and mix actually landed
   Mixes      weights and numbers for the two mixes and the Nifty 500
   Next       how the mixes did over the following years, as a table and
              as ₹1 lakh grown
@@ -31,7 +32,8 @@ from views.factor_indexes import CSS as FBI_CSS
 
 LOOKBACKS = {"3Y": 3, "5Y": 5, "7Y": 7, "10Y": 10, "Max": None, "Custom": "custom"}
 FORWARDS = {"3Y": 3, "5Y": 5, "7Y": 7}
-CAPS = {"No cap": None, "50%": 0.5, "35%": 0.35}
+CAPS = {"No cap": None, "50%": 0.5, "35%": 0.35, "25%": 0.25}
+MINS = {"None": None, "5%": 0.05, "10%": 0.10}
 MAX_CUSTOM = 10
 SHORT = {
     "NIFTY500 GROWTH 50": "Growth", "NIFTY500 VALUE 50": "Value",
@@ -73,6 +75,22 @@ CSS = """
 .ef-stat div {background:#F7F8FA; border-radius:10px; padding:12px 14px;}
 .ef-stat b {display:block; font-size:1.5rem; font-weight:600; color:#1B2533; line-height:1.1;}
 .ef-stat small {font-size:0.78rem; color:#6B7480;}
+.ef-panel {display:flex; align-items:baseline; gap:10px; padding:0 0 6px 2px; border-bottom:2px solid #E6E9ED;
+  margin-bottom:6px;}
+.ef-panel b {font-size:0.92rem; font-weight:600; color:#1B2533;}
+.ef-panel span {font-size:0.82rem; color:#8A939E;}
+.ef-panel.next {border-bottom-color:#1F4E79;}
+.ef-panel.next b {color:#1F4E79;}
+.ef-promise {display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin:0.6rem 0 0.4rem 0;}
+.ef-promise > div {border-left:3px solid var(--c); background:#F7F8FA; border-radius:0 8px 8px 0; padding:9px 12px;}
+.ef-promise h5 {font-size:0.78rem; font-weight:600; color:var(--c); margin:0 0 3px 0; padding:0;}
+.ef-promise p {margin:0; display:flex; align-items:baseline; gap:6px; font-variant-numeric:tabular-nums;}
+.ef-promise .was {color:#9AA3AE; font-size:0.95rem; text-decoration:line-through; text-decoration-color:#C9CFD6;}
+.ef-promise i {font-style:normal; color:#9AA3AE;}
+.ef-promise b {font-size:1.15rem; font-weight:600; color:#1B2533;}
+.ef-promise em {font-style:normal; font-size:0.78rem; font-weight:600; margin-left:auto;}
+.ef-promise em.up {color:#4E7A43;} .ef-promise em.down {color:#A5443A;}
+.ef-promise small {display:block; font-size:0.74rem; color:#8A939E; line-height:1.4; margin-top:2px;}
 .st-key-ef_steps button {border-radius:999px !important; min-height:0 !important; padding:0.15rem 0.55rem !important;}
 </style>
 """
@@ -187,17 +205,22 @@ def render():
                             "Low Vol, Momentum and Equal Weight from the Nifty 500, compared with the "
                             "<b>Nifty 500</b> itself.</p>", unsafe_allow_html=True)
 
-        d1, d2, d3 = st.columns([3.2, 1.9, 1.9], vertical_alignment="bottom")
+        d1, d2 = st.columns([3.2, 2], vertical_alignment="bottom")
         with d1:
             lb_key = st.segmented_control("Look-back", list(LOOKBACKS), default="5Y", key="ef_lb",
                                           help="The stretch of history the frontier is built from.") or "5Y"
         with d2:
             fw_key = st.segmented_control("Then test on the next", list(FORWARDS), default="5Y",
                                           key="ef_fw") or "5Y"
-        with d3:
+        e1, e2 = st.columns([3.2, 2], vertical_alignment="bottom")
+        with e1:
             cap_key = st.segmented_control("Max in one index", list(CAPS), default="No cap", key="ef_cap",
                                            help="Without a cap the best mix is often a single index. "
                                            "A cap forces it to spread out.") or "No cap"
+        with e2:
+            min_key = st.segmented_control("Min in each index", list(MINS), default="None", key="ef_min",
+                                           help="Every index in the set must get at least this much, so "
+                                           "no index is dropped to zero.") or "None"
 
     if len(names) < 2:
         _headline("Pick at least two indices to build a frontier.")
@@ -212,6 +235,19 @@ def render():
 
     fwd = FORWARDS[fw_key]
     cap = CAPS[cap_key]
+    floor = MINS[min_key]
+    n = len(names)
+    if floor is not None and floor * n > 1 + 1e-9:
+        _note(f"A {floor * 100:.0f}% minimum in each of {n} indices adds up to more than 100%, so every "
+              f"index gets an equal {100 / n:.0f}% and there is nothing left to optimise. "
+              f"Pick a lower minimum or fewer indices.")
+    elif floor is not None and abs(floor * n - 1) < 1e-9:
+        _note(f"A {floor * 100:.0f}% minimum in each of {n} indices uses up the whole 100%, so every mix "
+              f"is the equal mix. Pick a lower minimum or fewer indices.")
+    if cap is not None and cap * n < 1 - 1e-9:
+        _note(f"A {cap * 100:.0f}% cap can't hold {n} indices at 100% in total, so the cap is raised to "
+              f"{100 / n:.0f}% here.")
+    limits = (floor, cap)
     lookback = LOOKBACKS[lb_key]
     first, last = rets.index[0], rets.index[-1]
 
@@ -232,24 +268,44 @@ def render():
     if start is None:
         return
 
-    o = F.analyse_window(names_t, start, end, fwd, cap)
+    o = F.analyse_window(names_t, start, end, fwd, limits)
     fn = _weight_text_fn(names)
 
     _summary_headline(o, names)
 
     has_next = "landed" in o
     t1, t2 = st.columns([4, 1.6], vertical_alignment="bottom")
-    with t1:
-        _lab(f"The efficient frontier, {_span(o['start'], o['end'])}")
     with t2:
         show_next = st.toggle(f"Show the next {fwd} years", value=True, key="ef_next",
                               disabled=not has_next,
-                              help="Dashed: the frontier those years actually offered. Hollow circles: "
-                              "where the best mix and the Nifty 500 landed.")
-    chart = fc.frontier_chart(o, names, _label, fn, show_next and has_next)
-    _vega(chart)
-    _note("Each faint dot is a random mix of these indices. The navy line is the frontier: no mix "
-          "gives more return for its risk. Hover the line to see the mix at any point.")
+                              help="Puts the years after the window beside it, on the same axes.")
+    side = show_next and has_next
+    xd, yd = fc.shared_domains(o, names, side)
+    if side:
+        with t1:
+            _lab("Look-back window, then what happened next")
+        nxt_span = _span(o["fwd_start"], o["fwd_end"])
+        nxt_len = (f"next {fwd} years" if o["fwd_full"] else f"next {o['fwd_months']} months, so far")
+        left, right = st.columns(2, gap="medium")
+        with left:
+            st.markdown(f"<div class='ef-panel'><b>Look-back</b><span>{_span(o['start'], o['end'])}"
+                        f"</span></div>", unsafe_allow_html=True)
+            _vega(fc.frontier_chart(o, names, _label, fn, xd, yd, height=440))
+        with right:
+            st.markdown(f"<div class='ef-panel next'><b>The {nxt_len}</b><span>{nxt_span}</span></div>",
+                        unsafe_allow_html=True)
+            _vega(fc.next_chart(o, names, _label, xd, yd, height=440))
+        _promise_strip(o)
+        _note("Same axes on both sides. On the right, each hollow star is where the look-back put a "
+              "mix and the solid star is where it actually landed. Grey dashes: the look-back frontier. "
+              "Navy: the frontier those years really offered. Figures above are average returns, the "
+              "same measure as the charts; the table below shows growth a year (CAGR).")
+    else:
+        with t1:
+            _lab(f"The efficient frontier, {_span(o['start'], o['end'])}")
+        _vega(fc.frontier_chart(o, names, _label, fn, xd, yd))
+        _note("Each faint dot is a random mix of these indices. The navy line is the frontier: no mix "
+              "gives more return for its risk. Hover the line to see the mix at any point.")
 
     _mix_cards(o, names)
 
@@ -261,12 +317,12 @@ def render():
         _note("Pick a 3, 5, 7 or 10 year look-back to test every window in history the same way.")
     else:
         _section()
-        _track(names_t, lookback, fwd, cap, o["end"])
+        _track(names_t, lookback, fwd, limits, o["end"])
 
     st.markdown(
         f"<p class='fbi-source'>Source: NSE Indices via FinAPI, total return in INR, month-end levels to "
         f"{last:%b %Y}. Return is the average monthly return × 12; risk is monthly volatility × √12. "
-        f"Long only, fully invested. Best risk-adjusted = highest Sharpe ratio, with the Nifty 1D Rate "
+        f"Long only, fully invested, within the max and min per index you pick. Best risk-adjusted = highest Sharpe ratio, with the Nifty 1D Rate "
         f"index as the risk-free rate ({F.RF_FALLBACK:.1f}% a year before it starts in 2011). In the "
         f"years after a window, each mix is held at fixed weights and rebalanced monthly, before costs "
         f"and taxes. Past results don't predict future ones.</p>",
@@ -356,6 +412,30 @@ def _bar(names, w):
     return f"<div class='ef-bar'>{''.join(segs)}</div><div class='ef-w'>{''.join(keys)}</div>"
 
 
+def _promise_strip(o):
+    """One line per mix: what the look-back said, what the next years gave."""
+    cells = []
+    for k in ("best", "low", "equal"):
+        r0, v0 = o["mix"][k]
+        r1, v1 = o["landed"][k]
+        d = r1 - r0
+        cls = "up" if d >= 0 else "down"
+        cells.append(
+            f"<div style='--c:{fc.MIX_COLORS[k]}'><h5>{fc.MIX_NAMES[k]}</h5>"
+            f"<p><span class='was'>{_pct(r0)}</span><i>→</i><b>{_pct(r1)}</b>"
+            f"<em class='{cls}'>{d:+.1f} pts</em></p>"
+            f"<small>avg return a year<br>risk {_pct(v0)} → {_pct(v1)}</small></div>")
+    b0 = o["points"].loc[F.BENCHMARK]
+    r1, v1 = o["landed"]["bench"]
+    d = r1 - b0["ret"]
+    cells.append(
+        f"<div style='--c:{fc.GREY}'><h5>Nifty 500</h5>"
+        f"<p><span class='was'>{_pct(b0['ret'])}</span><i>→</i><b>{_pct(r1)}</b>"
+        f"<em class='{'up' if d >= 0 else 'down'}'>{d:+.1f} pts</em></p>"
+        f"<small>avg return a year<br>risk {_pct(b0['risk'])} → {_pct(v1)}</small></div>")
+    st.markdown(f"<div class='ef-promise'>{''.join(cells)}</div>", unsafe_allow_html=True)
+
+
 def _mix_cards(o, names):
     cards = []
     for k in ("best", "low"):
@@ -406,13 +486,14 @@ def _next_years(o, names, fwd):
     when = "so far" if partial else f"over the next {fwd} years"
     _headline(f"Did it work {when}? <span class='ef-verdict {cls}'>{verdict}</span>")
     gap = best["cagr"] - bench["cagr"]
-    txt = (f"Held from {span}, the best mix returned <b>{_pct(best['cagr'])} a year</b> against the "
+    txt = (f"Held from {span}, the best mix grew <b>{_pct(best['cagr'])} a year</b> against the "
            f"Nifty 500's {_pct(bench['cagr'])}, {'ahead' if gap >= 0 else 'behind'} by "
            f"{abs(gap):.1f} points. ")
     exp = o["mix"]["best"][0]
-    txt += (f"The window had promised about {_pct(exp)}; "
-            + ("it delivered more." if best["avg"] >= exp else "it delivered less, as the best mix usually does once the "
-               "period that made it look best is over."))
+    txt += (f"The look-back showed it averaging {_pct(exp)} a year; these years averaged "
+            f"{_pct(best['avg'])}, "
+            + ("more than promised." if best["avg"] >= exp else "less than promised, as the best mix usually does "
+               "once the period that made it look best is over."))
     _note(txt)
 
     rows = []
@@ -429,7 +510,7 @@ def _next_years(o, names, fwd):
             f"<td class='muted'>₹{r['growth'].iloc[-1]:.2f}L</td></tr>")
     st.markdown(
         "<table class='ef-table'><thead><tr><th>Next " + (f"{o['fwd_months']} months" if partial else f"{fwd} years")
-        + "</th><th>Return a year</th><th>Risk</th><th>Sharpe</th><th>Worst fall</th><th>₹1L became</th>"
+        + "</th><th>Growth a year</th><th>Risk</th><th>Sharpe</th><th>Worst fall</th><th>₹1L became</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table>", unsafe_allow_html=True)
     _note("The equal mix holds every index in the set equally, the simplest alternative to optimising.")
 
@@ -438,9 +519,9 @@ def _next_years(o, names, fwd):
     _vega(fc.growth_chart(g, ["best", "low", "equal", "bench"]))
 
 
-def _track(names_t, lookback, fwd, cap, selected_end):
+def _track(names_t, lookback, fwd, limits, selected_end):
     with st.spinner("Testing every window…"):
-        w, t = F.track_record(names_t, lookback, fwd, cap)
+        w, t = F.track_record(names_t, lookback, fwd, limits)
     _headline(f"Every {lookback}-year window, tested on the {fwd} years after it.")
     if t.empty:
         _note(f"There isn't yet {lookback + fwd} years of shared history to test even one window.")
