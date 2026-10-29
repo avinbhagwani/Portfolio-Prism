@@ -234,6 +234,116 @@ def hit_rate(rolling, a, b):
     }
 
 
+HIT_WINDOWS = (1, 3, 5, 7)
+
+
+def strategy_names():
+    """Comparable (total return) strategy indices, in display order."""
+    u = equity_universe()
+    return u.loc[u["indexCategory"] == "Strategy Indices", "indexName"].tolist()
+
+
+# Parent index each strategy index is built from, matched on name prefix
+# (longest first). Indices whose universe has no index of its own here
+# (Alpha 50, High Beta 50, Low Volatility 50, Quality Low-Volatility 30,
+# etc. draw from the top ~150-300 stocks) fall back to the Nifty 500.
+PARENT_PREFIXES = [
+    ("NIFTY MIDSMALLCAP400", "NIFTY MIDSMALLCAP 400"),
+    ("NIFTY SMALLCAP250", "NIFTY SMALLCAP 250"),
+    ("NIFTY MIDCAP150", "NIFTY MIDCAP 150"),
+    ("NIFTY TOTAL MARKET", "NIFTY TOTAL MARKET"),
+    ("NIFTY500", "NIFTY 500"),
+    ("NIFTY200", "NIFTY 200"),
+    ("NIFTY100", "NIFTY 100"),
+    ("NIFTY50", "NIFTY 50"),
+    ("NIFTY TOP ", "NIFTY 50"),
+]
+PARENT_ORDER = ["NIFTY 50", "NIFTY 100", "NIFTY 200", "NIFTY 500",
+                "NIFTY TOTAL MARKET", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250",
+                "NIFTY MIDSMALLCAP 400"]
+OTHER_PARENT = "NIFTY 500"
+
+
+def parent_index(name):
+    """(parent benchmark, True if matched by name rather than fallback)."""
+    for prefix, parent in PARENT_PREFIXES:
+        if name.startswith(prefix):
+            return parent, True
+    return OTHER_PARENT, False
+
+
+def hit_ratio_groups(years=None):
+    """
+    One hit-ratio table per parent index, each strategy index measured
+    only against the index it is built from. Returns a list of dicts:
+    bench, other (True for the fallback group), table, start, counts.
+    """
+    groups = {}
+    for n in strategy_names():
+        parent, matched = parent_index(n)
+        groups.setdefault((parent, not matched), []).append(n)
+    keys = sorted(groups, key=lambda k: (k[1], PARENT_ORDER.index(k[0])))
+    out = []
+    for parent, other in keys:
+        table, start, counts = hit_ratio_table(tuple(groups[(parent, other)]),
+                                               parent, years)
+        out.append(dict(bench=parent, other=other, table=table,
+                        start=start, counts=counts))
+    return out
+
+
+@st.cache_data(show_spinner=False)
+def hit_ratio_table(names, benchmark, years=None, windows=HIT_WINDOWS):
+    """
+    Share of rolling periods (%) in which each index's annualised return
+    beat the benchmark's, for each rolling window in `windows`.
+
+    Every index is measured from the same start: the earliest month-end
+    by which all of `names` and the benchmark have data. `years` keeps
+    only rolling periods ending in the last `years` years (None = all).
+
+    Returns (table, start, counts): table has one row per index and one
+    column per window; counts gives the number of rolling periods behind
+    each column (identical for every row, by construction).
+    """
+    levels = levels_to_as_of(list(names) + [benchmark])
+    start = max(levels[c].first_valid_index() for c in levels.columns)
+    monthly = levels.ffill().loc[start:].resample("ME").last()
+    end = monthly.index.max()
+    cutoff = end - pd.DateOffset(years=years) if years else None
+
+    table, counts = {}, {}
+    for w in windows:
+        roll = ((monthly / monthly.shift(w * 12)) ** (1 / w) - 1).dropna(how="all")
+        if cutoff is not None:
+            roll = roll[roll.index > cutoff]
+        counts[w] = len(roll)
+        col = f"{w}Y"
+        if roll.empty:
+            table[col] = pd.Series(float("nan"), index=list(names))
+            continue
+        beat = roll[list(names)].gt(roll[benchmark], axis=0)
+        table[col] = beat.mean() * 100
+    return pd.DataFrame(table), start, counts
+
+
+@st.cache_data(show_spinner=False)
+def hit_ratio_detail(name, parent, window, start, years=None):
+    """
+    The rolling `window`-year annualised returns of name and its parent
+    behind one hit-ratio cell: same start and same `years` filter as
+    hit_ratio_table, so the share of rows where name > parent equals
+    the number in the table.
+    """
+    levels = levels_to_as_of([name, parent])
+    monthly = levels.ffill().loc[start:].resample("ME").last()
+    roll = (((monthly / monthly.shift(window * 12)) ** (1 / window) - 1)
+            * 100).dropna()
+    if years:
+        roll = roll[roll.index > monthly.index.max() - pd.DateOffset(years=years)]
+    return roll
+
+
 def calendar_returns(levels):
     """Calendar-year returns (%); the last year is flagged partial."""
     year_end = levels.resample("YE").last()

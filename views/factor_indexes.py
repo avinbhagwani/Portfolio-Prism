@@ -11,6 +11,8 @@ behaved, against the market and against the alternative I'm weighing?"
               Rs 1 lakh
   Returns     rolling returns with hit rate, calendar years
   Risk        drawdowns with the worst episode, upside/downside capture
+  Hit ratio   share of rolling 1/3/5/7-year periods each strategy index
+              beat its own parent index (Nifty200 X vs Nifty 200, etc.)
   Market map  every index in a category by risk and return, and the
               year-by-year quilt (original quilt style, by request)
 
@@ -149,7 +151,8 @@ def render():
                phrase=phrase, picks=picks, bench=bench, names=names_all,
                as_of=as_of, years=years, period=period)
 
-    t1, t2, t3, t4 = st.tabs(["Overview", "Returns", "Risk", "Market map"])
+    t1, t2, t3, t4, t5 = st.tabs(["Overview", "Returns", "Risk", "Hit ratio",
+                                  "Market map"])
     with t1:
         _overview(ctx)
     with t2:
@@ -157,6 +160,8 @@ def render():
     with t3:
         _risk(ctx)
     with t4:
+        _hit_ratio(ctx)
+    with t5:
         _market_map(ctx, universe)
 
     _methodology(as_of)
@@ -377,6 +382,124 @@ def _risk(ctx):
 
 
 # =====================================================================
+# HIT RATIO
+# =====================================================================
+
+HIT_SPANS = {"All history": None, "Last 10 years": 10, "Last 5 years": 5}
+_NAVY = (31, 78, 121)
+_RUST = (181, 74, 60)
+
+
+def _hit_cell(v):
+    """Navy tint above 50%, rust below; stronger the further from 50."""
+    if pd.isna(v):
+        return "color:#B7BEC7"
+    rgb = _NAVY if v >= 50 else _RUST
+    alpha = min(abs(v - 50) / 50, 1) * 0.32 + 0.03
+    return f"background-color:rgba({rgb[0]},{rgb[1]},{rgb[2]},{alpha:.2f})"
+
+
+def _hit_ratio(ctx):
+    _label("Rolling periods ending in")
+    span = st.segmented_control("Rolling periods ending in", list(HIT_SPANS),
+                                default="All history", key="fbi_hit_span",
+                                label_visibility="collapsed")
+    years = HIT_SPANS[span or "All history"]
+
+    groups = fm.hit_ratio_groups(years)
+    t5 = pd.concat([g["table"]["5Y"] for g in groups]).dropna()
+    if t5.empty:
+        _headline("Not enough shared history for these rolling windows.")
+        return
+    majority = int((t5 > 50).sum())
+    always = int((t5 >= 100).sum())
+    when = ("over their full history" if years is None
+            else f"in rolling periods ending in the last {years} years")
+    text = (f"<b>{majority} of {len(t5)}</b> strategy indices beat the index "
+            f"they are built from in more than half of rolling 5-year "
+            f"periods {when}")
+    text += (f"; {always} beat it in every one." if always
+             else "; none beat it in every one.")
+    _headline(text)
+    _note("Each strategy index is measured only against its own parent "
+          "index: Nifty200 Momentum 30 against the Nifty 200, Nifty Midcap150 "
+          "Quality 50 against the Nifty Midcap 150, and so on. Each cell is the "
+          "share of rolling periods in which the index's annualised return "
+          "beat its parent's. Within a table every row starts from the same "
+          "month. Click any number to see the periods behind it.")
+
+    picks = set(ctx["picks"])
+    for g in groups:
+        _section()
+        if g["other"]:
+            _label(f"Other strategy indices, against the {_n(g['bench'])}")
+            _note("These pick stocks from a wider universe that has no index "
+                  "of its own here, so the Nifty 500 stands in as the parent.")
+        else:
+            _label(f"Built from the {_n(g['bench'])}")
+        _note(f"Measured from {g['start']:%b %Y}, when every index in this "
+              f"table has data.")
+        _hit_table(g, years, picks)
+
+
+def _hit_table(g, years, picks):
+    table, counts, bench = g["table"], g["counts"], g["bench"]
+    t = table.sort_values(["5Y", "7Y", "3Y"], ascending=False)
+    names = list(t.index)
+    bold = [n in picks for n in names]
+    t.index = [_n(n) for n in names]
+    t.index.name = "Strategy index"
+    styler = (t.style
+              .map(_hit_cell)
+              .format(lambda v: "–" if pd.isna(v) else f"{v:.0f}%")
+              .apply(lambda col: ["font-weight:700" if b else "" for b in bold]))
+    cfg = {c: st.column_config.Column(
+               f"{c} rolling", width="small",
+               help=f"{counts[int(c[:-1])]} rolling {c[:-1]}-year periods. "
+                    f"Click a number to see them.")
+           for c in t.columns}
+    key = f"fbi_hit_{bench}_{'other' if g['other'] else 'own'}"
+    event = st.dataframe(styler, column_config=cfg, width="stretch",
+                         height=35 * (len(t) + 1) + 3, key=key,
+                         on_select="rerun", selection_mode="single-cell")
+
+    # Open the popup only when the clicked cell changes, so it does not
+    # pop up again on every unrelated rerun while the cell stays selected.
+    cells = event.selection.cells if event else []
+    picked = (cells[0][0], cells[0][1]) if cells else None
+    seen = f"{key}_seen"
+    if picked and picked != st.session_state.get(seen):
+        st.session_state[seen] = picked
+        row, col = picked
+        if col in t.columns and not pd.isna(t.iloc[row][col]):
+            _hit_popup(names[row], bench, int(col[:-1]), g["start"], years,
+                       t.iloc[row][col])
+    elif not picked:
+        st.session_state.pop(seen, None)
+
+
+@st.dialog("Hit ratio, period by period", width="large")
+def _hit_popup(name, parent, window, start, years, pct):
+    roll = fm.hit_ratio_detail(name, parent, window, start, years)
+    gap = roll[name] - roll[parent]
+    wins = int((gap > 0).sum())
+    _headline(f"<b>{_n(name)}</b> beat the {_n(parent)} in {wins} of "
+              f"{len(gap)} rolling {window}-year periods ({pct:.0f}%), "
+              f"{'leading' if gap.median() >= 0 else 'trailing'} by a median "
+              f"of {abs(gap.median()):.1f} points a year.")
+    worst = gap.idxmin()
+    best = gap.idxmax()
+    _note(f"Periods ending {roll.index[0]:%b %Y} to {roll.index[-1]:%b %Y}. "
+          f"Best: {gap[best]:+.1f} pts a year to {best:%b %Y}. "
+          f"Worst: {gap[worst]:+.1f} pts a year to {worst:%b %Y}.".replace("-", "−"))
+    _label(f"Lead over the {_n(parent)}, each rolling {window}-year period "
+           f"(navy = beat, rust = lagged). Hover a bar for dates.")
+    _chart(fv.hit_gap_chart, roll, name, parent, window)
+    _label(f"Rolling {window}-year return, annualised")
+    _chart(fv.rolling_chart, roll, [name, parent], parent)
+
+
+# =====================================================================
 # MARKET MAP
 # =====================================================================
 
@@ -509,6 +632,10 @@ def _methodology(as_of):
             "divided by the benchmark's annualised return in those months.\n"
             "- **Rolling returns** overlap month to month, so hit rates "
             "describe history rather than prove an edge.\n"
+            "- **Hit ratio** is the share of rolling 1, 3, 5 and 7-year "
+            "periods (month-end to month-end) in which an index's annualised "
+            "return beat its parent index (the index it selects stocks from). "
+            "Within each table every index starts from the same month.\n"
             "- **Backtested history.** NSE calculates many factor indices "
             "back to April 2005, before they launched. Returns before an "
             "index's launch date are back-calculated, not live.\n"

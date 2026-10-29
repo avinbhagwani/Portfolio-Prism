@@ -355,3 +355,39 @@ def risk_return_chart(points, benchmark, highlight, label_names):
     ).encode(x=x, y=y, text="name:N").transform_filter(hover)
     return alt.layer(zone, zone_txt, vline, hline, dots, labels,
                      hover_label).properties(width="container", height=440)
+
+
+HIT_RUST = "#B54A3C"
+
+
+def hit_gap_chart(rolling, name, parent, window):
+    """
+    One bar per rolling period: the index's annualised return minus its
+    parent's. Navy where the index won, rust where it lost, so the share
+    of navy bars is the hit ratio in the table.
+    """
+    df = pd.DataFrame({
+        "date": rolling.index,
+        "gap": rolling[name] - rolling[parent],
+        "idx": rolling[name], "par": rolling[parent],
+    })
+    df["start"] = df["date"] - pd.DateOffset(years=window)
+    df["won"] = df["gap"] > 0
+    bars = alt.Chart(df).mark_bar(width={"band": 0.9}).encode(
+        x=alt.X("yearmonth(date):T", title=None,
+                axis=alt.Axis(format="%Y", tickCount=8)),
+        y=alt.Y("gap:Q", title=None,
+                axis=alt.Axis(labelExpr="format(datum.value, '+.0f') + ' pts'",
+                              tickCount=6)),
+        color=alt.Color("won:N", scale=alt.Scale(domain=[True, False],
+                                                 range=[COLOR_A, HIT_RUST])),
+        tooltip=[
+            alt.Tooltip("start:T", title="From", format="%b %Y"),
+            alt.Tooltip("date:T", title="To", format="%b %Y"),
+            alt.Tooltip("idx:Q", title=pretty_name(name), format=".1f"),
+            alt.Tooltip("par:Q", title=pretty_name(parent), format=".1f"),
+            alt.Tooltip("gap:Q", title="Lead (pts a year)", format="+.1f"),
+        ],
+    )
+    zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=ZERO).encode(y="y:Q")
+    return alt.layer(zero, bars).properties(width="container", height=240)
