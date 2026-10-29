@@ -185,7 +185,7 @@ def render():
     universe = fm.equity_universe()
     all_names = universe["indexName"].tolist()
 
-    with st.container(border=True):
+    with st.container(key="controls_ef"):
         c1, c2 = st.columns([2.2, 3], vertical_alignment="bottom")
         with c1:
             mode = st.segmented_control("Indices", ["Nifty 500 factors", "Custom set"],

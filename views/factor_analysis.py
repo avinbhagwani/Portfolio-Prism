@@ -87,7 +87,7 @@ def render():
         unsafe_allow_html=True,
     )
 
-    with st.container(border=True):
+    with st.container(key="controls_fa"):
         c1, c2 = st.columns([1.4, 3], vertical_alignment="bottom")
         with c1:
             mode = st.segmented_control("Analyse", ["One fund", "Portfolio"], default="One fund",

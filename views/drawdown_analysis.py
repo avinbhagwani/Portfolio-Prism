@@ -137,7 +137,7 @@ def render():
     sel = st.session_state.setdefault(
         "dd_sel", [{"kind": "index", "key": n} for n in DEFAULT_INDICES if n in names])
 
-    with st.container(border=True):
+    with st.container(key="controls_dd"):
         st.markdown(f"<div class='dd-head'><b>Compare</b><span>{len(sel)} of {MAX_SERIES}"
                     f"{' · that’s the most' if len(sel) >= MAX_SERIES else ''}</span></div>",
                     unsafe_allow_html=True)

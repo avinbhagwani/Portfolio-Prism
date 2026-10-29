@@ -157,7 +157,7 @@ def _list(posts, error):
 
     st.write("")
     first, rest = posts[0], posts[1:]
-    with st.container(border=True):
+    with st.container(key="card_feature"):
         a, b = st.columns([1.15, 1], gap="large", vertical_alignment="center")
         with a:
             if first.cover:
@@ -179,7 +179,7 @@ def _list(posts, error):
         for i in range(0, len(rest), 2):
             cols = st.columns(2, gap="medium")
             for col, p in zip(cols, rest[i:i + 2]):
-                with col, st.container(border=True):
+                with col, st.container(key=f"card_post_{p.slug}"):
                     if p.cover:
                         st.image(p.cover, width="stretch")
                     st.markdown(
@@ -238,7 +238,7 @@ def _reader(post, posts):
         st.markdown("<div class='pw-section'>More articles</div>", unsafe_allow_html=True)
         cols = st.columns(len(others), gap="medium")
         for col, p in zip(cols, others):
-            with col, st.container(border=True):
+            with col, st.container(key=f"card_more_{p.slug}"):
                 if p.cover:
                     st.image(p.cover, width="stretch")
                 st.markdown(
