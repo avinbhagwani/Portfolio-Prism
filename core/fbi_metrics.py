@@ -243,6 +243,55 @@ def strategy_names():
     return u.loc[u["indexCategory"] == "Strategy Indices", "indexName"].tolist()
 
 
+# Parent index each strategy index is built from, matched on name prefix
+# (longest first). Indices whose universe has no index of its own here
+# (Alpha 50, High Beta 50, Low Volatility 50, Quality Low-Volatility 30,
+# etc. draw from the top ~150-300 stocks) fall back to the Nifty 500.
+PARENT_PREFIXES = [
+    ("NIFTY MIDSMALLCAP400", "NIFTY MIDSMALLCAP 400"),
+    ("NIFTY SMALLCAP250", "NIFTY SMALLCAP 250"),
+    ("NIFTY MIDCAP150", "NIFTY MIDCAP 150"),
+    ("NIFTY TOTAL MARKET", "NIFTY TOTAL MARKET"),
+    ("NIFTY500", "NIFTY 500"),
+    ("NIFTY200", "NIFTY 200"),
+    ("NIFTY100", "NIFTY 100"),
+    ("NIFTY50", "NIFTY 50"),
+    ("NIFTY TOP ", "NIFTY 50"),
+]
+PARENT_ORDER = ["NIFTY 50", "NIFTY 100", "NIFTY 200", "NIFTY 500",
+                "NIFTY TOTAL MARKET", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250",
+                "NIFTY MIDSMALLCAP 400"]
+OTHER_PARENT = "NIFTY 500"
+
+
+def parent_index(name):
+    """(parent benchmark, True if matched by name rather than fallback)."""
+    for prefix, parent in PARENT_PREFIXES:
+        if name.startswith(prefix):
+            return parent, True
+    return OTHER_PARENT, False
+
+
+def hit_ratio_groups(years=None):
+    """
+    One hit-ratio table per parent index, each strategy index measured
+    only against the index it is built from. Returns a list of dicts:
+    bench, other (True for the fallback group), table, start, counts.
+    """
+    groups = {}
+    for n in strategy_names():
+        parent, matched = parent_index(n)
+        groups.setdefault((parent, not matched), []).append(n)
+    keys = sorted(groups, key=lambda k: (k[1], PARENT_ORDER.index(k[0])))
+    out = []
+    for parent, other in keys:
+        table, start, counts = hit_ratio_table(tuple(groups[(parent, other)]),
+                                               parent, years)
+        out.append(dict(bench=parent, other=other, table=table,
+                        start=start, counts=counts))
+    return out
+
+
 @st.cache_data(show_spinner=False)
 def hit_ratio_table(names, benchmark, years=None, windows=HIT_WINDOWS):
     """

@@ -12,7 +12,7 @@ behaved, against the market and against the alternative I'm weighing?"
   Returns     rolling returns with hit rate, calendar years
   Risk        drawdowns with the worst episode, upside/downside capture
   Hit ratio   share of rolling 1/3/5/7-year periods each strategy index
-              beat the Nifty 500, Nifty 50 and Nifty Midcap 150
+              beat its own parent index (Nifty200 X vs Nifty 200, etc.)
   Market map  every index in a category by risk and return, and the
               year-by-year quilt (original quilt style, by request)
 
@@ -385,7 +385,6 @@ def _risk(ctx):
 # HIT RATIO
 # =====================================================================
 
-HIT_BENCHMARKS = ["NIFTY 500", "NIFTY 50", "NIFTY MIDCAP 150"]
 HIT_SPANS = {"All history": None, "Last 10 years": 10, "Last 5 years": 5}
 _NAVY = (31, 78, 121)
 _RUST = (181, 74, 60)
@@ -401,40 +400,46 @@ def _hit_cell(v):
 
 
 def _hit_ratio(ctx):
-    names = tuple(fm.strategy_names())
-
     _label("Rolling periods ending in")
     span = st.segmented_control("Rolling periods ending in", list(HIT_SPANS),
                                 default="All history", key="fbi_hit_span",
                                 label_visibility="collapsed")
     years = HIT_SPANS[span or "All history"]
 
-    first, start, counts = fm.hit_ratio_table(names, HIT_BENCHMARKS[0], years)
-    t5 = first["5Y"].dropna()
+    groups = fm.hit_ratio_groups(years)
+    t5 = pd.concat([g["table"]["5Y"] for g in groups]).dropna()
     if t5.empty:
         _headline("Not enough shared history for these rolling windows.")
         return
     majority = int((t5 > 50).sum())
     always = int((t5 >= 100).sum())
-    when = ("since " + f"{start:%b %Y}") if years is None else \
-        f"in rolling periods ending in the last {years} years"
-    text = (f"<b>{majority} of {len(t5)}</b> strategy indices beat the "
-            f"{_n(HIT_BENCHMARKS[0])} in more than half of rolling 5-year "
+    when = ("over their full history" if years is None
+            else f"in rolling periods ending in the last {years} years")
+    text = (f"<b>{majority} of {len(t5)}</b> strategy indices beat the index "
+            f"they are built from in more than half of rolling 5-year "
             f"periods {when}")
-    text += (f", and {always} beat it in every one." if always
-             else ". None beat it in every one.")
+    text += (f"; {always} beat it in every one." if always
+             else "; none beat it in every one.")
     _headline(text)
-    _note(f"Every index is measured from {start:%b %Y}, the first month all "
-          f"{len(names)} strategy indices have data, so the rows are like for "
-          f"like. Each cell is the share of rolling periods in which the index's "
-          f"annualised return beat the benchmark's. Click a column to sort.")
+    _note("Each strategy index is measured only against its own parent "
+          "index: Nifty200 Momentum 30 against the Nifty 200, Nifty Midcap150 "
+          "Quality 50 against the Nifty Midcap 150, and so on. Each cell is the "
+          "share of rolling periods in which the index's annualised return "
+          "beat its parent's. Within a table every row starts from the same "
+          "month. Click a column to sort.")
 
     picks = set(ctx["picks"])
-    for i, bench in enumerate(HIT_BENCHMARKS):
-        table = first if i == 0 else fm.hit_ratio_table(names, bench, years)[0]
+    for g in groups:
         _section()
-        _label(f"Hit ratio against the {_n(bench)}")
-        _hit_table(table, counts, picks)
+        if g["other"]:
+            _label(f"Other strategy indices, against the {_n(g['bench'])}")
+            _note("These pick stocks from a wider universe that has no index "
+                  "of its own here, so the Nifty 500 stands in as the parent.")
+        else:
+            _label(f"Built from the {_n(g['bench'])}")
+        _note(f"Measured from {g['start']:%b %Y}, when every index in this "
+              f"table has data.")
+        _hit_table(g["table"], g["counts"], picks)
 
 
 def _hit_table(table, counts, picks):
@@ -589,8 +594,8 @@ def _methodology(as_of):
             "describe history rather than prove an edge.\n"
             "- **Hit ratio** is the share of rolling 1, 3, 5 and 7-year "
             "periods (month-end to month-end) in which an index's annualised "
-            "return beat the benchmark's. All strategy indices start from the "
-            "same month so the table compares like with like.\n"
+            "return beat its parent index (the index it selects stocks from). "
+            "Within each table every index starts from the same month.\n"
             "- **Backtested history.** NSE calculates many factor indices "
             "back to April 2005, before they launched. Returns before an "
             "index's launch date are back-calculated, not live.\n"
