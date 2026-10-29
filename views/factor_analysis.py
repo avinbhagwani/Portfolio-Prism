@@ -29,6 +29,7 @@ from core.data import (
     month_end_dates,
     search_funds,
 )
+from views import tutorial
 from views.factor_indexes import CSS as FBI_CSS
 
 MAX_FUNDS = 10
@@ -86,6 +87,7 @@ def render():
         "momentum. Then see what's left over: the manager's alpha.</div>",
         unsafe_allow_html=True,
     )
+    tutorial.launcher("factor-analysis")
 
     with st.container(key="controls_fa"):
         c1, c2 = st.columns([1.4, 3], vertical_alignment="bottom")
@@ -113,10 +115,13 @@ def render():
     _cards(result, model_key)
     t1, t2, t3 = st.tabs(["Exposures", "Over time", "Details"])
     with t1:
+        tutorial.tab_link("factor-analysis", "Exposures")
         _exposures(result)
     with t2:
+        tutorial.tab_link("factor-analysis", "Over time")
         _over_time(result)
     with t3:
+        tutorial.tab_link("factor-analysis", "Details")
         _details(result, name, extra)
     st.markdown(
         "<p class='fbi-source'>Equity factors: IndiaFactorLibrary (Invespar), built as described in "

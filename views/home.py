@@ -26,6 +26,7 @@ from core import substack as sb
 from core.config import MODEL_CONFIG
 from core.fbi_metrics import as_of_date, equity_universe
 from core.index_data import load_index_history
+from views import tutorial
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 PAGES = {}  # set by app.py
@@ -128,6 +129,7 @@ def render():
                 with st.container(key="ph_cta_secondary", width="content"):
                     st.page_link(PAGES["fbi-intelligence"], label="Explore indices",
                                  icon=":material/query_stats:")
+        tutorial.launcher("home", "New here? Take the tour")
     with right:
         st.iframe((STATIC / "home-prism.html").read_text(encoding="utf-8"), height=400)
 

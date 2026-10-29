@@ -23,6 +23,7 @@ from pathlib import Path
 import streamlit as st
 
 from core.time_game import game_payload
+from views import tutorial
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
@@ -33,6 +34,7 @@ def _template():
 
 
 def render_try_to_time():
+    tutorial.launcher("try-to-time", "How to play")
     html = _template().replace("__DATA__", game_payload())
     st.iframe(html, height="content")   # grows and shrinks with each screen
     with st.expander("How the game works"):
@@ -79,6 +81,7 @@ def render_handle_it():
     from core.handle_game import PRESETS, payload
 
     st.markdown(HANDLE_CSS, unsafe_allow_html=True)
+    tutorial.launcher("can-you-handle-it", "How to play")
     universe = fm.equity_universe()
     names = universe["indexName"].tolist()
     ordered = [p for p in PRESETS if p in names] + [n for n in names if n not in PRESETS]

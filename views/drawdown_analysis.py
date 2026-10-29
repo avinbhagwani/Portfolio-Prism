@@ -24,6 +24,7 @@ from charts import fbi_vega as fv
 from core import fbi_metrics as fm
 from core.data import fetch_fund_history, search_funds
 from core.index_analytics import find_drawdown_episodes
+from views import tutorial
 from views.factor_indexes import CSS as FBI_CSS
 
 DEFAULT_INDICES = ["NIFTY MIDCAP 150", "NIFTY 50"]
@@ -130,6 +131,7 @@ def render():
         "and mutual funds: how deep, how long they stayed down, and whether they have climbed back.</div>",
         unsafe_allow_html=True,
     )
+    tutorial.launcher("drawdown-analysis")
 
     universe = fm.equity_universe()
     names = universe["indexName"].tolist()
