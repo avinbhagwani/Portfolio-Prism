@@ -327,6 +327,23 @@ def hit_ratio_table(names, benchmark, years=None, windows=HIT_WINDOWS):
     return pd.DataFrame(table), start, counts
 
 
+@st.cache_data(show_spinner=False)
+def hit_ratio_detail(name, parent, window, start, years=None):
+    """
+    The rolling `window`-year annualised returns of name and its parent
+    behind one hit-ratio cell: same start and same `years` filter as
+    hit_ratio_table, so the share of rows where name > parent equals
+    the number in the table.
+    """
+    levels = levels_to_as_of([name, parent])
+    monthly = levels.ffill().loc[start:].resample("ME").last()
+    roll = (((monthly / monthly.shift(window * 12)) ** (1 / window) - 1)
+            * 100).dropna()
+    if years:
+        roll = roll[roll.index > monthly.index.max() - pd.DateOffset(years=years)]
+    return roll
+
+
 def calendar_returns(levels):
     """Calendar-year returns (%); the last year is flagged partial."""
     year_end = levels.resample("YE").last()

@@ -426,7 +426,7 @@ def _hit_ratio(ctx):
           "Quality 50 against the Nifty Midcap 150, and so on. Each cell is the "
           "share of rolling periods in which the index's annualised return "
           "beat its parent's. Within a table every row starts from the same "
-          "month. Click a column to sort.")
+          "month. Click any number to see the periods behind it.")
 
     picks = set(ctx["picks"])
     for g in groups:
@@ -439,13 +439,15 @@ def _hit_ratio(ctx):
             _label(f"Built from the {_n(g['bench'])}")
         _note(f"Measured from {g['start']:%b %Y}, when every index in this "
               f"table has data.")
-        _hit_table(g["table"], g["counts"], picks)
+        _hit_table(g, years, picks)
 
 
-def _hit_table(table, counts, picks):
+def _hit_table(g, years, picks):
+    table, counts, bench = g["table"], g["counts"], g["bench"]
     t = table.sort_values(["5Y", "7Y", "3Y"], ascending=False)
-    bold = [n in picks for n in t.index]
-    t.index = [_n(n) for n in t.index]
+    names = list(t.index)
+    bold = [n in picks for n in names]
+    t.index = [_n(n) for n in names]
     t.index.name = "Strategy index"
     styler = (t.style
               .map(_hit_cell)
@@ -453,10 +455,48 @@ def _hit_table(table, counts, picks):
               .apply(lambda col: ["font-weight:700" if b else "" for b in bold]))
     cfg = {c: st.column_config.Column(
                f"{c} rolling", width="small",
-               help=f"{counts[int(c[:-1])]} rolling {c[:-1]}-year periods")
+               help=f"{counts[int(c[:-1])]} rolling {c[:-1]}-year periods. "
+                    f"Click a number to see them.")
            for c in t.columns}
-    st.dataframe(styler, column_config=cfg, width="stretch",
-                 height=35 * (len(t) + 1) + 3)
+    key = f"fbi_hit_{bench}_{'other' if g['other'] else 'own'}"
+    event = st.dataframe(styler, column_config=cfg, width="stretch",
+                         height=35 * (len(t) + 1) + 3, key=key,
+                         on_select="rerun", selection_mode="single-cell")
+
+    # Open the popup only when the clicked cell changes, so it does not
+    # pop up again on every unrelated rerun while the cell stays selected.
+    cells = event.selection.cells if event else []
+    picked = (cells[0][0], cells[0][1]) if cells else None
+    seen = f"{key}_seen"
+    if picked and picked != st.session_state.get(seen):
+        st.session_state[seen] = picked
+        row, col = picked
+        if col in t.columns and not pd.isna(t.iloc[row][col]):
+            _hit_popup(names[row], bench, int(col[:-1]), g["start"], years,
+                       t.iloc[row][col])
+    elif not picked:
+        st.session_state.pop(seen, None)
+
+
+@st.dialog("Hit ratio, period by period", width="large")
+def _hit_popup(name, parent, window, start, years, pct):
+    roll = fm.hit_ratio_detail(name, parent, window, start, years)
+    gap = roll[name] - roll[parent]
+    wins = int((gap > 0).sum())
+    _headline(f"<b>{_n(name)}</b> beat the {_n(parent)} in {wins} of "
+              f"{len(gap)} rolling {window}-year periods ({pct:.0f}%), "
+              f"{'leading' if gap.median() >= 0 else 'trailing'} by a median "
+              f"of {abs(gap.median()):.1f} points a year.")
+    worst = gap.idxmin()
+    best = gap.idxmax()
+    _note(f"Periods ending {roll.index[0]:%b %Y} to {roll.index[-1]:%b %Y}. "
+          f"Best: {gap[best]:+.1f} pts a year to {best:%b %Y}. "
+          f"Worst: {gap[worst]:+.1f} pts a year to {worst:%b %Y}.".replace("-", "−"))
+    _label(f"Lead over the {_n(parent)}, each rolling {window}-year period "
+           f"(navy = beat, rust = lagged). Hover a bar for dates.")
+    _chart(fv.hit_gap_chart, roll, name, parent, window)
+    _label(f"Rolling {window}-year return, annualised")
+    _chart(fv.rolling_chart, roll, [name, parent], parent)
 
 
 # =====================================================================
