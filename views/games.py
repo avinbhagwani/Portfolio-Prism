@@ -5,11 +5,13 @@ Try to Time
     Five Nifty 500 factor indices race through each calendar year. Before
     each year the player sees only what was knowable at the previous
     year-end (last year, 3 and 5 years: returns, risk, worst falls, how
-    often each has won) and backs one index. Points, a streak, and their
-    money against an untouched equal mix are tracked live. The end screen
-    compares their picks with the equal mix, simple rules (chase last
-    year's winner, back the 3-year leader), the market, perfect hindsight
-    and 10,000 random players.
+    often each has won) and backs one index. Points and a streak are tracked
+    live. The opponent is a mystery rival, Momentum or Value drawn at random
+    each game and held without switching; it stays hidden until the end
+    screen, which compares the picks with the rival, the equal mix, simple
+    rules (chase last year's winner, back the 3-year leader), the market,
+    perfect hindsight and 10,000 random players. Every game opens with the
+    instructions, then the goal.
 
 The game is static/try-to-time.html in an st.iframe (the only
 place JavaScript runs), so every animation happens in the browser with
@@ -45,9 +47,10 @@ def render_try_to_time():
             "before April 2005 use the history available and are marked.\n"
             "- **Scoring.** 100 points for the winner, 50 for second, 20 for "
             "third. Back-to-back winners add a streak bonus of 25 per year.\n"
-            "- **Your money.** ₹1 lakh moves into your pick each year. The "
-            "*equal mix* puts 20% in each index at the start and never touches "
-            "it.\n"
+            "- **Your money.** ₹1 lakh moves into your pick each year.\n"
+            "- **The goal.** Beat your *mystery rival*: either Momentum or "
+            "Value, drawn at random each game, bought at the start and never "
+            "switched. Its identity and value stay hidden until the end.\n"
             "- **Source.** NSE Indices via FinAPI. Past returns don't predict "
             "future ones, which is rather the point."
         )
