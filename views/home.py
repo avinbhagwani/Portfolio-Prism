@@ -48,8 +48,7 @@ SOON = [
 
 CSS = """
 <style>
-.ph-eyebrow {font-size:0.8rem; letter-spacing:0.18em; text-transform:uppercase;
-  color:#1F4E79; font-weight:600; margin:0 0 0.15rem 0;}
+.ph-eyebrow {display:none;}
 .ph-by {font-size:0.88rem; color:#8A939E; margin:0 0 0.9rem 0;}
 .ph-by b {color:#5B6572; font-weight:500;}
 .ph-title {font-size:3.1rem; font-weight:700; color:#1B2533; line-height:1.06;
@@ -71,9 +70,9 @@ CSS = """
 .ph-stat b {display:block; font-size:1.6rem; font-weight:700; color:#1B2533;
   letter-spacing:-0.02em; font-variant-numeric:tabular-nums;}
 .ph-stat small {font-size:0.82rem; color:#8A939E;}
-.ph-section {font-size:0.78rem; letter-spacing:0.14em; text-transform:uppercase;
-  color:#8A939E; font-weight:600; margin:2.2rem 0 0.8rem 0;}
-.ph-card-art {background:#F7F9FB; border-radius:10px; padding:6px 0; margin-bottom:0.6rem;}
+.ph-section {font-size:1.15rem; letter-spacing:-0.01em; color:#17212D;
+  font-weight:600; margin:2.8rem 0 0.9rem 0;}
+.ph-card-art {background:#FFFFFF; border-radius:10px; padding:6px 0; margin-bottom:0.6rem;}
 .ph-card-art img {display:block; width:100%; height:auto;}
 .ph-card-title {font-size:1.08rem; font-weight:600; color:#1B2533; margin:0.1rem 0 0.25rem 0;}
 .ph-card-sub {font-size:0.9rem; color:#6B7480; line-height:1.45; min-height:2.6rem;}
@@ -143,10 +142,10 @@ def render():
         unsafe_allow_html=True,
     )
 
-    st.markdown("<div class='ph-section'>Pick a lens</div>", unsafe_allow_html=True)
+    st.markdown("<div class='ph-section'>Tools</div>", unsafe_allow_html=True)
     cols = st.columns(len(LENSES), gap="medium")
     for col, (path, title, art, blurb) in zip(cols, LENSES):
-        with col, st.container(border=True):
+        with col, st.container(key=f"card_lens_{path}"):
             st.markdown(
                 f"<div class='ph-card-art'>{_svg_img(art)}</div>"
                 f"<div class='ph-card-title'>{title}</div>"
@@ -178,10 +177,10 @@ def _play():
     games = [g for g in GAMES if g[0] in PAGES]
     if not games:
         return
-    st.markdown("<div class='ph-section'>Play</div>", unsafe_allow_html=True)
+    st.markdown("<div class='ph-section'>Games</div>", unsafe_allow_html=True)
     cols = st.columns(len(games), gap="medium")
     for col, (path, title, blurb, cta, art) in zip(cols, games):
-        with col, st.container(border=True):
+        with col, st.container(key=f"card_play_{path}"):
             if art == "bars":
                 pic = "".join(f"<i style='background:{c};width:{w}%'></i>" for c, w in
                               [("#C08A2E", 92), ("#2F6FB0", 74), ("#8E5B9F", 66),
@@ -221,7 +220,7 @@ def _latest_article():
         return
     p = posts[0]
     st.markdown("<div class='ph-section'>From my Substack</div>", unsafe_allow_html=True)
-    with st.container(border=True):
+    with st.container(key="card_latest"):
         a, b = st.columns([1, 2.4], gap="medium", vertical_alignment="center")
         with a:
             if p.cover:

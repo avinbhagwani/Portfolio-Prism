@@ -57,39 +57,22 @@ QUILT_PRESETS = {
 
 CSS = """
 <style>
-.fbi-eyebrow {font-size:0.78rem; letter-spacing:0.08em; text-transform:uppercase;
-  color:#1F4E79; font-weight:600; margin:0 0 0.35rem 0;}
-.fbi-title {font-size:2.1rem; font-weight:600; color:#1B2533; line-height:1.15;
-  margin:0 0 0.5rem 0; letter-spacing:-0.01em;}
-.fbi-sub {color:#6B7480; font-size:1rem; margin:0 0 1.6rem 0; max-width:46rem;}
-.fbi-headline {font-size:1.45rem; line-height:1.45; font-weight:500;
-  color:#1B2533; margin:1.2rem 0 0.4rem 0; max-width:54rem; letter-spacing:-0.005em;}
-.fbi-headline b {font-weight:600;}
-.fbi-label {font-size:0.82rem; color:#6B7480; font-weight:500;
-  margin:1.8rem 0 0.2rem 0;}
-.fbi-note {font-size:0.84rem; color:#8A939E; margin:0.2rem 0 0 0; max-width:54rem;}
-.fbi-section {height:1px; background:#ECEFF2; margin:2.6rem 0 0.4rem 0;}
-
 .kpi-row {display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
   gap:16px; margin:1.4rem 0 0.6rem 0;}
-.kpi {border:1px solid #E6E9ED; border-top:3px solid var(--c); border-radius:10px;
-  padding:16px 20px 18px 20px; background:#fff;}
+.kpi {border-radius:14px; padding:18px 20px 18px 20px; background:#F4F6F9;}
 .kpi-name {font-size:0.9rem; color:#1B2533; font-weight:500; margin-bottom:10px;}
 .kpi-big {font-size:2.3rem; font-weight:600; color:#1B2533; line-height:1.05;
   font-variant-numeric:tabular-nums; letter-spacing:-0.02em;}
 .kpi-big span {font-size:0.9rem; font-weight:400; color:#8A939E; margin-left:6px;
   letter-spacing:0;}
 .kpi-delta {font-size:0.86rem; font-weight:500; margin:6px 0 14px 0;}
-.kpi-delta.pos {color:#2E7D4F;} .kpi-delta.neg {color:#B54A3C;}
+.kpi-delta.pos {color:#1F4E79;} .kpi-delta.neg {color:#B54A3C;}
 .kpi-delta.flat {color:#8A939E;}
-.kpi-meta {display:flex; gap:22px; border-top:1px solid #F0F2F5; padding-top:12px;}
+.kpi-meta {display:flex; gap:22px; border-top:1px solid #E3E8EE; padding-top:12px;}
 .kpi-meta b {display:block; font-size:0.98rem; font-weight:600; color:#1B2533;
   font-variant-numeric:tabular-nums;}
 .kpi-meta small {font-size:0.76rem; color:#8A939E;}
 
-div[data-testid="stTabs"] [data-baseweb="tab-list"] {gap:1.6rem;}
-div[data-testid="stTabs"] button p {font-size:1rem; font-weight:500;}
-.fbi-source {font-size:0.8rem; color:#9AA3AE; margin-top:2.2rem;}
 </style>
 """
 
@@ -113,8 +96,8 @@ def render():
     names = universe["indexName"].tolist()
     display = dict(zip(universe["indexName"], universe["display"]))
 
-    with st.container(border=True):
-        c1, c2, c3, c4 = st.columns([2.6, 2.6, 1.9, 2.9],
+    with st.container(key="controls_fbi"):
+        c1, c2, c3, c4 = st.columns([2.4, 2.4, 1.8, 3.4],
                                     vertical_alignment="bottom")
         with c1:
             a = st.selectbox("Index", names, index=names.index(DEFAULT_A),
@@ -425,21 +408,42 @@ def _hit_ratio(ctx):
           "index: Nifty200 Momentum 30 against the Nifty 200, Nifty Midcap150 "
           "Quality 50 against the Nifty Midcap 150, and so on. Each cell is the "
           "share of rolling periods in which the index's annualised return "
-          "beat its parent's. Within a table every row starts from the same "
-          "month. Click any number to see the periods behind it.")
+          "beat its parent's. Click any number to see the periods behind it.")
 
     picks = set(ctx["picks"])
-    for g in groups:
+    # Short tables sit two to a row; long ones get the full width.
+    small = [g for g in groups if len(g["table"]) <= 5]
+    large = [g for g in groups if len(g["table"]) > 5]
+    _section()
+    for i in range(0, len(small), 2):
+        cols = st.columns(2, gap="large")
+        for col, g in zip(cols, small[i:i + 2]):
+            with col:
+                _hit_group(g, years, picks)
+    for g in large:
         _section()
-        if g["other"]:
-            _label(f"Other strategy indices, against the {_n(g['bench'])}")
-            _note("These pick stocks from a wider universe that has no index "
-                  "of its own here, so the Nifty 500 stands in as the parent.")
-        else:
-            _label(f"Built from the {_n(g['bench'])}")
-        _note(f"Measured from {g['start']:%b %Y}, when every index in this "
-              f"table has data.")
-        _hit_table(g, years, picks)
+        _hit_group(g, years, picks)
+
+
+def _hit_group(g, years, picks):
+    if g["other"]:
+        _label(f"Other strategy indices, against the {_n(g['bench'])}")
+        _note("These pick stocks from a wider universe with no index of its "
+              f"own here, so the Nifty 500 stands in. From {g['start']:%b %Y}.")
+    else:
+        _label(f"Built from the {_n(g['bench'])}")
+        _note(f"From {g['start']:%b %Y}, when every index here has data.")
+    _hit_table(g, years, picks)
+
+
+def _short_name(name):
+    """Drop the parent from the name inside its own table:
+    'NIFTY MIDCAP150 MOMENTUM 50' -> 'Momentum 50'."""
+    for prefix, _ in fm.PARENT_PREFIXES:
+        if name.startswith(prefix):
+            cut = "NIFTY " if prefix == "NIFTY TOP " else prefix
+            return _n(name[len(cut):].strip())
+    return _n(name)
 
 
 def _hit_table(g, years, picks):
@@ -447,14 +451,14 @@ def _hit_table(g, years, picks):
     t = table.sort_values(["5Y", "7Y", "3Y"], ascending=False)
     names = list(t.index)
     bold = [n in picks for n in names]
-    t.index = [_n(n) for n in names]
+    t.index = [_n(n) if g["other"] else _short_name(n) for n in names]
     t.index.name = "Strategy index"
     styler = (t.style
               .map(_hit_cell)
               .format(lambda v: "–" if pd.isna(v) else f"{v:.0f}%")
               .apply(lambda col: ["font-weight:700" if b else "" for b in bold]))
     cfg = {c: st.column_config.Column(
-               f"{c} rolling", width="small",
+               f"{c}", width=62,
                help=f"{counts[int(c[:-1])]} rolling {c[:-1]}-year periods. "
                     f"Click a number to see them.")
            for c in t.columns}

@@ -12,7 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 from views import (factor_analysis, factor_indexes, drawdown_analysis, efficient_frontier,
-                   games, home, intro, sidebar, writing)
+                   games, home, intro, sidebar, style, writing)
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -25,16 +25,7 @@ st.set_page_config(
 st.logo(str(STATIC / "prism-logo-light.svg"), size="large",
         icon_image=str(STATIC / "prism-icon-light.svg"))
 
-st.markdown(
-    """
-    <style>
-    [data-testid="stMainBlockContainer"] {
-        max-width: 1180px; padding-top: 3rem; padding-bottom: 3rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+style.inject()
 
 PAGES = [
     st.Page(home.render, title="Home", icon=":material/home:",
