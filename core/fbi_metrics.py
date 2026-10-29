@@ -234,6 +234,50 @@ def hit_rate(rolling, a, b):
     }
 
 
+HIT_WINDOWS = (1, 3, 5, 7)
+
+
+def strategy_names():
+    """Comparable (total return) strategy indices, in display order."""
+    u = equity_universe()
+    return u.loc[u["indexCategory"] == "Strategy Indices", "indexName"].tolist()
+
+
+@st.cache_data(show_spinner=False)
+def hit_ratio_table(names, benchmark, years=None, windows=HIT_WINDOWS):
+    """
+    Share of rolling periods (%) in which each index's annualised return
+    beat the benchmark's, for each rolling window in `windows`.
+
+    Every index is measured from the same start: the earliest month-end
+    by which all of `names` and the benchmark have data. `years` keeps
+    only rolling periods ending in the last `years` years (None = all).
+
+    Returns (table, start, counts): table has one row per index and one
+    column per window; counts gives the number of rolling periods behind
+    each column (identical for every row, by construction).
+    """
+    levels = levels_to_as_of(list(names) + [benchmark])
+    start = max(levels[c].first_valid_index() for c in levels.columns)
+    monthly = levels.ffill().loc[start:].resample("ME").last()
+    end = monthly.index.max()
+    cutoff = end - pd.DateOffset(years=years) if years else None
+
+    table, counts = {}, {}
+    for w in windows:
+        roll = ((monthly / monthly.shift(w * 12)) ** (1 / w) - 1).dropna(how="all")
+        if cutoff is not None:
+            roll = roll[roll.index > cutoff]
+        counts[w] = len(roll)
+        col = f"{w}Y"
+        if roll.empty:
+            table[col] = pd.Series(float("nan"), index=list(names))
+            continue
+        beat = roll[list(names)].gt(roll[benchmark], axis=0)
+        table[col] = beat.mean() * 100
+    return pd.DataFrame(table), start, counts
+
+
 def calendar_returns(levels):
     """Calendar-year returns (%); the last year is flagged partial."""
     year_end = levels.resample("YE").last()
