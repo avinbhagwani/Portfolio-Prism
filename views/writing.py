@@ -15,6 +15,7 @@ shared directly.
 import streamlit as st
 
 from core import substack as sb
+from views import tutorial
 
 # Set by app.py so the reader can link to related tools
 PAGES = {}
@@ -140,6 +141,7 @@ def _list(posts, error):
         f"behind PRISM. Published on {sb.PUBLICATION}.</div>",
         unsafe_allow_html=True,
     )
+    tutorial.launcher("writing", "How this page works")
     c1, c2, _ = st.columns([1.3, 1.3, 4])
     c1.link_button("Subscribe free", sb.tracked(sb.SUBSCRIBE_URL, "list-subscribe"), type="primary",
                    icon=":material/mail:", width="stretch")

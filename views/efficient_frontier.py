@@ -28,6 +28,7 @@ import streamlit as st
 from charts import frontier_vega as fc
 from core import fbi_metrics as fm
 from core import frontier as F
+from views import tutorial
 from views.factor_indexes import CSS as FBI_CSS
 
 LOOKBACKS = {"3Y": 3, "5Y": 5, "7Y": 7, "10Y": 10, "Max": None, "Custom": "custom"}
@@ -181,6 +182,7 @@ def render():
         "history, slide that window through time, and see how the mix did in the years that followed.</div>",
         unsafe_allow_html=True,
     )
+    tutorial.launcher("efficient-frontier")
 
     universe = fm.equity_universe()
     all_names = universe["indexName"].tolist()

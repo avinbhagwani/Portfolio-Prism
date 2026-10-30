@@ -29,6 +29,7 @@ from charts.quilt_chart import build_quilt_color_map, make_quilt_chart
 from charts.render import show_chart
 from core import fbi_metrics as fm
 from core.index_analytics import build_quilt
+from views import tutorial
 
 DEFAULT_A = "NIFTY200 MOMENTUM 30"
 DEFAULT_B = "NIFTY500 VALUE 50"
@@ -91,6 +92,7 @@ def render():
         "have been.</div>",
         unsafe_allow_html=True,
     )
+    tutorial.launcher("fbi-intelligence")
 
     universe = fm.equity_universe()
     names = universe["indexName"].tolist()
@@ -137,14 +139,19 @@ def render():
     t1, t2, t3, t4, t5 = st.tabs(["Overview", "Returns", "Risk", "Hit ratio",
                                   "Market map"])
     with t1:
+        tutorial.tab_link("fbi-intelligence", "Overview")
         _overview(ctx)
     with t2:
+        tutorial.tab_link("fbi-intelligence", "Returns")
         _returns(ctx)
     with t3:
+        tutorial.tab_link("fbi-intelligence", "Risk")
         _risk(ctx)
     with t4:
+        tutorial.tab_link("fbi-intelligence", "Hit ratio")
         _hit_ratio(ctx)
     with t5:
+        tutorial.tab_link("fbi-intelligence", "Market map")
         _market_map(ctx, universe)
 
     _methodology(as_of)

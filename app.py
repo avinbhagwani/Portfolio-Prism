@@ -12,7 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 from views import (factor_analysis, factor_indexes, drawdown_analysis, efficient_frontier,
-                   games, home, intro, sidebar, style, writing)
+                   games, home, intro, sidebar, style, tutorial, writing)
 
 STATIC = Path(__file__).resolve().parent / "static"
 
@@ -71,4 +71,5 @@ st.session_state["intro_shown"] = True
 st.session_state["last_page"] = current
 
 sidebar.render(pages_by_path, current)
+tutorial.maybe_open(current)
 page.run()

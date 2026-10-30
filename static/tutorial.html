@@ -1,0 +1,557 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@font-face { font-family: Inter; src: url("/app/static/fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: Inter; src: url("/app/static/fonts/Inter-Medium.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: Inter; src: url("/app/static/fonts/Inter-SemiBold.woff2") format("woff2"); font-weight: 600; }
+@font-face { font-family: Inter; src: url("/app/static/fonts/Inter-Bold.woff2") format("woff2"); font-weight: 700; }
+:root {
+  --ink:#17212D; --ink2:#3A4552; --muted:#66707C; --faint:#98A1AC; --line:#E6EAEF; --mist:#F4F6F9;
+  --navy:#1F4E79; --navy2:#173E61; --navy-soft:#E8F0F8; --rust:#B54A3C; --rust-soft:#FBEDEA;
+  --gold:#C9A25A; --gold-soft:#F7EEDD; --ease:cubic-bezier(.2,.8,.2,1);
+}
+* { box-sizing:border-box; }
+html, body { margin:0; padding:0; background:transparent; color:var(--ink);
+  font-family:Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing:antialiased; }
+body { padding:2px 2px 6px 2px; }
+button { font:inherit; cursor:pointer; color:inherit; }
+b { font-weight:600; color:var(--ink); }
+.num { font-variant-numeric:tabular-nums; }
+
+/* ---------- chapters ---------- */
+.chapters { display:flex; gap:14px; margin:0 0 18px 0; overflow-x:auto; scrollbar-width:none; }
+.chapters::-webkit-scrollbar { display:none; }
+.ch { flex:1 1 0; min-width:74px; background:none; border:none; padding:0; text-align:left; }
+.ch span { display:block; font-size:12.5px; font-weight:500; color:var(--faint); margin-bottom:7px;
+  white-space:nowrap; transition:color .2s; }
+.ch:hover span { color:var(--ink2); }
+.ch.on span { color:var(--ink); font-weight:600; }
+.ch.done span { color:var(--muted); }
+.track { display:flex; gap:3px; }
+.track i { flex:1; height:4px; border-radius:2px; background:#E3E8EE; position:relative; overflow:hidden; }
+.track i::after { content:""; position:absolute; inset:0; background:var(--navy); transform:scaleX(0);
+  transform-origin:left; transition:transform .45s var(--ease); }
+.track i.done::after, .track i.on::after { transform:scaleX(1); }
+.track i.on::after { background:var(--gold); }
+
+/* ---------- stage ---------- */
+.stage { position:relative; height:400px; overflow:hidden; }
+.slide { position:absolute; inset:0; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);
+  gap:36px; align-items:center; }
+.slide.solo { grid-template-columns:minmax(0,1fr); max-width:620px; }
+.slide.enter-r { animation:inR .42s var(--ease) both; } .slide.enter-l { animation:inL .42s var(--ease) both; }
+.slide.leave-r { animation:outL .3s ease both; } .slide.leave-l { animation:outR .3s ease both; }
+@keyframes inR { from { opacity:0; transform:translateX(34px); } to { opacity:1; transform:none; } }
+@keyframes inL { from { opacity:0; transform:translateX(-34px); } to { opacity:1; transform:none; } }
+@keyframes outL { to { opacity:0; transform:translateX(-24px); } }
+@keyframes outR { to { opacity:0; transform:translateX(24px); } }
+.text { max-height:400px; overflow-y:auto; padding-right:4px; scrollbar-width:thin; }
+.eyebrow { font-size:12px; font-weight:600; color:#B07A2A; margin:0 0 8px 0; letter-spacing:.01em; }
+h2 { font-size:25px; line-height:1.18; letter-spacing:-.022em; font-weight:600; margin:0 0 12px 0; }
+.body { font-size:15.5px; line-height:1.6; color:var(--ink2); margin:0; }
+.body p { margin:0 0 10px 0; }
+.take { margin:16px 0 0 0; padding:11px 14px; background:var(--gold-soft); border-radius:12px;
+  font-size:14px; line-height:1.5; color:#5B4012; display:flex; gap:10px; }
+.take::before { content:"✦"; color:var(--gold); font-size:13px; line-height:1.5; }
+.take b { color:#4A330C; }
+.flag { font-size:12.5px; color:var(--rust); margin:0 0 8px 0; }
+.vis { height:100%; max-height:400px; display:flex; flex-direction:column; justify-content:center; min-width:0; }
+.panel { background:var(--mist); border-radius:18px; padding:20px 22px; }
+
+/* ---------- footer ---------- */
+.foot { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; }
+.btn { border:1px solid var(--navy); background:var(--navy); color:#fff; border-radius:999px; padding:10px 20px;
+  font-weight:500; font-size:14.5px; display:inline-flex; align-items:center; gap:8px; min-width:118px;
+  justify-content:center; transition:transform .15s ease, background .15s, box-shadow .2s, opacity .2s; }
+.btn:hover { background:var(--navy2); transform:translateY(-1px); box-shadow:0 6px 16px rgba(31,78,121,.22); }
+.btn.ghost { background:#fff; color:var(--ink2); border-color:var(--line); }
+.btn.ghost:hover { background:var(--mist); box-shadow:none; }
+.btn[disabled] { opacity:0; pointer-events:none; }
+.btn.nudge { animation:nudge 1.6s ease-in-out 2; }
+@keyframes nudge { 0%,100% { box-shadow:0 0 0 0 rgba(31,78,121,0); } 50% { box-shadow:0 0 0 6px rgba(31,78,121,.16); } }
+.btn.final { background:var(--gold); border-color:var(--gold); color:#2B1E06; }
+.btn.final:hover { background:#B8913F; }
+.mid { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.count { font-size:12.5px; color:var(--faint); }
+.keys { font-size:11.5px; color:#B6BDC6; }
+.keys kbd { font:inherit; border:1px solid #DDE2E8; border-radius:4px; padding:0 4px; }
+.score { font-size:12.5px; color:var(--navy); font-weight:500; }
+
+/* ---------- quiz ---------- */
+.quiz { margin:16px 0 0 0; }
+.vis .quiz { margin:0; }
+.qq { font-size:14.5px; font-weight:600; color:var(--ink); line-height:1.45; margin:0 0 10px 0; }
+.opts { display:flex; flex-direction:column; gap:7px; }
+.opt { text-align:left; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 14px;
+  font-size:14.5px; color:var(--ink2); display:flex; align-items:center; gap:10px;
+  transition:border-color .15s, background .15s, transform .15s; }
+.opt:hover { border-color:#BCC8D4; transform:translateX(2px); }
+.opt i { width:20px; height:20px; border-radius:50%; border:1.5px solid #CBD3DC; flex:none; display:flex;
+  align-items:center; justify-content:center; font-style:normal; font-size:12px; font-weight:700; }
+.vis .opt { background:#fff; }
+.opt.right { border-color:var(--navy); background:var(--navy-soft); color:var(--ink); }
+.opt.right i { background:var(--navy); border-color:var(--navy); color:#fff; }
+.opt.wrong { border-color:var(--rust); background:var(--rust-soft); }
+.opt.wrong i { background:var(--rust); border-color:var(--rust); color:#fff; }
+.opt.dim { opacity:.55; }
+.answered .opt { pointer-events:none; }
+.why { font-size:14px; line-height:1.5; margin:10px 0 0 0; animation:inR .35s var(--ease) both; }
+.why.ok { color:var(--navy); } .why.no { color:var(--rust); }
+.pop { animation:pop .45s var(--ease); }
+@keyframes pop { 0% { transform:scale(1); } 40% { transform:scale(1.035); } 100% { transform:scale(1); } }
+
+/* ---------- shared visual bits ---------- */
+.cap { font-size:12.5px; color:var(--muted); margin:10px 0 0 0; line-height:1.45; min-height:1.45em; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 14px 0; }
+.chip { border:1px solid var(--line); background:#fff; border-radius:999px; padding:5px 12px; font-size:13px;
+  color:var(--muted); transition:all .15s; }
+.chip:hover { color:var(--ink); }
+.chip.on { background:var(--navy); border-color:var(--navy); color:#fff; }
+input[type=range] { -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:3px;
+  background:linear-gradient(90deg,#DCE3EA,#DCE3EA); outline:none; margin:10px 0; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:22px; height:22px; border-radius:50%;
+  background:#fff; border:2px solid var(--navy); box-shadow:0 2px 6px rgba(20,30,50,.18); cursor:grab; }
+input[type=range]::-moz-range-thumb { width:20px; height:20px; border-radius:50%; background:#fff;
+  border:2px solid var(--navy); cursor:grab; }
+.slabel { display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); }
+.slabel b { font-size:13px; }
+.big { font-size:44px; font-weight:600; letter-spacing:-.03em; line-height:1; font-variant-numeric:tabular-nums; }
+.big small { font-size:14px; font-weight:400; color:var(--muted); letter-spacing:0; margin-left:6px; }
+.say { font-size:15.5px; line-height:1.45; color:var(--ink); margin:10px 0 0 0; min-height:2.9em; }
+
+/* recipe */
+.eq { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.eq em { font-style:normal; color:var(--faint); font-weight:600; }
+.ing { border:none; border-radius:999px; padding:7px 13px; font-size:14px; background:#fff; color:var(--ink);
+  box-shadow:0 1px 2px rgba(20,30,50,.06); opacity:0; transform:translateY(8px) scale(.96);
+  animation:chipin .45s var(--ease) forwards; transition:background .15s, color .15s; }
+.ing.lead { background:var(--navy); color:#fff; } .ing.alpha { background:var(--gold-soft); color:#6B4A12; }
+.ing.out { background:var(--ink); color:#fff; }
+.ing:hover, .ing.on { background:var(--navy); color:#fff; }
+@keyframes chipin { to { opacity:1; transform:none; } }
+
+/* tiles */
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+.tile { background:#fff; border-radius:14px; padding:14px 16px; opacity:0; animation:chipin .5s var(--ease) forwards; }
+.tile small { display:block; font-size:12px; color:var(--muted); margin-bottom:6px; }
+.tile strong { display:block; font-size:28px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.tile span { display:block; font-size:12px; color:var(--muted); margin-top:4px; line-height:1.35; }
+
+/* gauge */
+.gauge { position:relative; width:100%; max-width:330px; margin:0 auto; }
+.gauge svg { width:100%; display:block; overflow:visible; }
+.gauge .val { position:absolute; left:0; right:0; bottom:8px; text-align:center; }
+
+/* bars */
+.bars { display:flex; flex-direction:column; gap:4px; }
+.bar { display:grid; grid-template-columns:92px 1fr 52px; align-items:center; gap:10px; height:32px; border-radius:8px;
+  padding:0 6px; transition:background .15s; }
+.bar:hover { background:#fff; }
+.bar .lab { font-size:13.5px; } .bar .v { font-size:13.5px; text-align:right; font-variant-numeric:tabular-nums; }
+.btrack { position:relative; height:100%; }
+.btrack .zero { position:absolute; left:50%; top:4px; bottom:4px; width:1px; background:#C2CAD3; }
+.btrack .fill { position:absolute; top:10px; height:12px; border-radius:3px; transition:left .7s var(--ease), width .7s var(--ease); }
+.btrack .rng { position:absolute; top:15px; height:2px; background:var(--ink); opacity:0; transition:opacity .4s .5s; }
+.btrack .rng::before, .btrack .rng::after { content:""; position:absolute; top:-4px; width:1.5px; height:10px; background:var(--ink); }
+.btrack .rng::before { left:0; } .btrack .rng::after { right:0; }
+.bars.ready .rng { opacity:.45; }
+.key { display:flex; gap:14px; font-size:12px; color:var(--muted); margin:8px 0 0 6px; }
+.key i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+
+/* chart */
+.chart svg { width:100%; display:block; overflow:visible; }
+.chart text { font-family:Inter, sans-serif; }
+.tip { position:absolute; pointer-events:none; background:var(--ink); color:#fff; font-size:12px; padding:5px 9px;
+  border-radius:7px; white-space:nowrap; transform:translate(-50%,-130%); opacity:0; transition:opacity .12s; }
+.draw { stroke-dasharray:var(--len); stroke-dashoffset:var(--len); animation:draw 1.3s var(--ease) .1s forwards; }
+@keyframes draw { to { stroke-dashoffset:0; } }
+.fade { opacity:0; animation:chipin .5s var(--ease) forwards; }
+
+/* grid of squares */
+.sq { display:grid; grid-template-columns:repeat(20,1fr); gap:3px; max-width:340px; }
+.sq span { aspect-ratio:1; border-radius:2px; background:#DFE5EB; transition:background .25s; }
+.sq span.on { background:var(--navy); }
+
+/* steps */
+.steps { list-style:none; margin:0; padding:0; counter-reset:s; }
+.steps li { counter-increment:s; position:relative; padding:10px 0 10px 40px; font-size:14.5px; line-height:1.45;
+  color:var(--ink2); border-bottom:1px solid #E3E8EE; opacity:0; animation:chipin .45s var(--ease) forwards; }
+.steps li:last-child { border-bottom:none; }
+.steps li::before { content:counter(s); position:absolute; left:0; top:9px; width:26px; height:26px; border-radius:50%;
+  background:#fff; color:var(--navy); border:1.5px solid var(--navy); font-size:12.5px; font-weight:600;
+  display:flex; align-items:center; justify-content:center; transition:all .3s; }
+.steps li.tick::before { content:"✓"; background:var(--navy); color:#fff; }
+
+/* quilt */
+.quilt { display:grid; gap:4px; }
+.qcol { display:flex; flex-direction:column; gap:4px; opacity:0; animation:chipin .45s var(--ease) forwards; }
+.qcol small { font-size:11px; color:var(--muted); text-align:center; margin-bottom:2px; }
+.qt { height:30px; border-radius:6px; color:#fff; font-size:10.5px; font-weight:600; display:flex; align-items:center;
+  justify-content:center; transition:opacity .15s, transform .15s; cursor:default; }
+.quilt.hl .qt { opacity:.18; } .quilt.hl .qt.on { opacity:1; transform:scale(1.04); }
+.legend { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 0 0; }
+
+/* the tool's own charts and cards */
+.panel.real { background:#fff; border:1px solid var(--line); padding:14px 14px 12px 14px; }
+.vg { width:100%; min-height:120px; }
+.vg .vega-embed { width:100%; } .vg .vega-embed summary { display:none; }
+.vg-miss { font-size:13px; color:var(--muted); padding:30px 0; text-align:center; }
+.panel.real img { width:100%; display:block; border-radius:6px; }
+.facards { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.facard { background:var(--mist); border-radius:14px; padding:14px 16px 15px 16px; transition:box-shadow .3s, opacity .3s; }
+.facard small { display:block; font-size:12px; color:#8A939E; font-weight:500; margin-bottom:5px; }
+.facard b { font-size:26px; font-weight:600; color:#1B2533; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.facard span { display:block; font-size:12px; color:#6B7480; margin-top:3px; line-height:1.35; }
+.facard span.good { color:#2E7D4F; } .facard span.bad { color:#B54A3C; }
+.facards.hl .facard { opacity:.45; } .facards.hl .facard.on { opacity:1; box-shadow:0 0 0 2px var(--gold); }
+.regt { width:100%; border-collapse:collapse; font-size:12.5px; }
+.regt th { text-align:left; font-weight:500; color:var(--muted); font-size:11.5px; padding:6px 6px; border-bottom:1px solid #E6E9ED; }
+.regt td { padding:7px 6px; border-bottom:1px solid #F0F2F5; color:#1B2533; font-variant-numeric:tabular-nums; }
+.regt td.sig { color:var(--navy); font-weight:600; }
+
+/* mock UI */
+.mock { background:#fff; border-radius:14px; padding:14px; box-shadow:0 1px 2px rgba(20,30,50,.05); font-size:12.5px; }
+.mock .row { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px 0; align-items:center; }
+.mock .fld { background:var(--mist); border-radius:8px; padding:7px 10px; color:var(--ink2); flex:1; min-width:90px; }
+.mock .fld small { display:block; color:var(--faint); font-size:10.5px; margin-bottom:2px; }
+.mock .seg { display:flex; } .mock .seg span { border:1px solid var(--line); padding:5px 9px; color:var(--muted); }
+.mock .seg span:first-child { border-radius:7px 0 0 7px; } .mock .seg span:last-child { border-radius:0 7px 7px 0; }
+.mock .seg span.on { background:var(--navy); color:#fff; border-color:var(--navy); }
+.mock .pill { background:var(--navy); color:#fff; border-radius:999px; padding:6px 14px; }
+.mock .hl { outline:2px solid var(--gold); outline-offset:2px; border-radius:8px; animation:glow 2.4s ease-in-out infinite; }
+@keyframes glow { 50% { outline-color:rgba(201,162,90,.35); } }
+.tools { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.tool { background:#fff; border-radius:14px; padding:14px; opacity:0; animation:chipin .45s var(--ease) forwards; }
+.tool b { display:block; font-size:14px; margin:6px 0 3px 0; } .tool span { font-size:12.5px; color:var(--muted); line-height:1.4; }
+.tool svg { width:26px; height:26px; }
+
+@media (max-width: 680px) {
+  .stage { height:auto; min-height:470px; }
+  .slide { position:relative; grid-template-columns:1fr; gap:18px; align-items:start; }
+  .slide.leave-r, .slide.leave-l { position:absolute; }
+  .text { max-height:none; }
+  .vis { max-height:none; }
+  h2 { font-size:21px; }
+  .body { font-size:15px; }
+  .keys { display:none; }
+  .btn { min-width:96px; padding:10px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration:.01s !important; animation-delay:0s !important; transition-duration:.01s !important; }
+}
+</style>
+<script src="/app/static/vendor/vega.min.js"></script>
+<script src="/app/static/vendor/vega-lite.min.js"></script>
+<script src="/app/static/vendor/vega-embed.min.js"></script>
+</head>
+<body>
+<div id="app">
+  <nav class="chapters" id="chapters"></nav>
+  <main class="stage" id="stage"></main>
+  <footer class="foot">
+    <button class="btn ghost" id="back">← Back</button>
+    <div class="mid"><span class="count num" id="count"></span><span class="keys" id="keys">Use <kbd>←</kbd> <kbd>→</kbd> to move</span></div>
+    <button class="btn" id="next">Next →</button>
+  </footer>
+</div>
+<script>
+const D = __DATA__;
+const S = D.slides;
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+const fmt = (x, d = 2, signed = true) => (signed && x >= 0 ? "+" : "") + x.toFixed(d).replace("-", "−");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let i = Math.max(0, Math.min(S.length - 1, D.start || 0));
+const answers = {};            // slide index -> first answer correct?
+
+// ------------------------------------------------------------------ chapters
+const chapters = [];
+S.forEach((s, k) => { let c = chapters.find(c => c.name === s.chapter); if (!c) chapters.push(c = { name: s.chapter, idx: [] }); c.idx.push(k); });
+function drawChapters() {
+  const box = $("chapters"); box.innerHTML = "";
+  if (chapters.length < 2) { box.style.display = "none"; }
+  chapters.forEach(c => {
+    const b = el("button", "ch" + (c.idx.includes(i) ? " on" : c.idx[c.idx.length - 1] < i ? " done" : ""));
+    b.appendChild(el("span", null, c.name));
+    const t = el("div", "track");
+    c.idx.forEach(k => t.appendChild(el("i", k < i ? "done" : k === i ? "on" : "")));
+    b.appendChild(t);
+    b.onclick = () => go(c.idx[0]);
+    box.appendChild(b);
+  });
+}
+
+// ------------------------------------------------------------------ count-up
+function countUp(node, to, dec = 0, pre = "", post = "", ms = 900) {
+  if (reduce) { node.textContent = pre + to.toFixed(dec) + post; return; }
+  const t0 = performance.now();
+  const step = (t) => { const p = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - p, 3);
+    node.textContent = pre + (to * e).toFixed(dec).replace("-", "−") + post; if (p < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+// ------------------------------------------------------------------ visuals
+const V = {};
+
+V.recipe = (v) => {
+  const p = el("div", "panel"), eq = el("div", "eq"), cap = el("p", "cap", v.hint || "Hover an ingredient.");
+  v.chips.forEach((c, k) => {
+    if (k) eq.appendChild(el("em", null, k === 1 ? "=" : "+"));
+    const b = el("button", "ing " + (c.kind || ""), c.t); b.style.animationDelay = (k * 90) + "ms";
+    if (c.d) { b.onmouseenter = b.onfocus = () => { eq.querySelectorAll(".ing").forEach(x => x.classList.remove("on")); b.classList.add("on"); cap.innerHTML = c.d; }; }
+    eq.appendChild(b);
+  });
+  p.append(eq, cap); return p;
+};
+
+V.tiles = (v) => {
+  const p = el("div", "panel"), g = el("div", "tiles");
+  v.items.forEach((t, k) => {
+    const d = el("div", "tile"); d.style.animationDelay = (k * 110) + "ms";
+    const s = el("strong", "num", t.value);
+    d.append(el("small", null, t.label), s, el("span", null, t.sub || ""));
+    if (t.num != null) setTimeout(() => countUp(s, t.num, t.dec || 0, t.pre || "", t.post || ""), k * 110);
+    g.appendChild(d);
+  });
+  p.appendChild(g); if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p;
+};
+
+
+V.beta = (v) => {
+  const p = el("div", "panel");
+  p.innerHTML = `<div class="slabel"><span>Fund's beta</span><b class="num" id="bv"></b></div>
+    <input type="range" id="bs" min="0.4" max="1.6" step="0.01">
+    <div class="slabel"><span>Market move</span><b class="num" id="mv"></b></div>
+    <input type="range" id="ms" min="-20" max="20" step="1">
+    <div class="bars" style="margin-top:8px">
+      <div class="bar"><span class="lab">Market</span><div class="btrack"><div class="zero"></div><div class="fill" id="mb"></div></div><span class="v num" id="mt"></span></div>
+      <div class="bar"><span class="lab">The fund</span><div class="btrack"><div class="zero"></div><div class="fill" id="fb"></div></div><span class="v num" id="ft"></span></div>
+    </div><p class="say" id="bsay"></p>
+    <div class="chips" style="margin:6px 0 0 0"><button class="chip" id="breset">Use ${v.fund}'s beta (${v.beta.toFixed(2)})</button></div>`;
+  const bs = p.querySelector("#bs"), ms = p.querySelector("#ms");
+  bs.value = v.start || 1.2; ms.value = -10;
+  const pos = (x) => { const span = 32, c = Math.max(-1, Math.min(1, x / span)); return c >= 0 ? [50, 50 * c] : [50 + 50 * c, -50 * c]; };
+  const upd = () => {
+    const b = +bs.value, m = +ms.value, f = b * m;
+    p.querySelector("#bv").textContent = b.toFixed(2); p.querySelector("#mv").textContent = fmt(m, 0) + "%";
+    [["mb", "mt", m], ["fb", "ft", f]].forEach(([bar, txt, x]) => {
+      const [l, w] = pos(x), n = p.querySelector("#" + bar);
+      n.style.left = l + "%"; n.style.width = Math.max(.6, w) + "%"; n.style.background = x < 0 ? "#B54A3C" : "#1F4E79";
+      p.querySelector("#" + txt).textContent = fmt(x, 1) + "%"; });
+    const word = b > 1.05 ? "swings harder than" : b < 0.95 ? "swings less than" : "moves almost exactly with";
+    p.querySelector("#bsay").innerHTML = `A beta of <b>${b.toFixed(2)}</b> ${word} the market: a ${fmt(m, 0)}% market month suggests about <b>${fmt(f, 1)}%</b> for the fund.`;
+  };
+  bs.oninput = ms.oninput = upd;
+  p.querySelector("#breset").onclick = () => { bs.value = v.beta; upd(); };
+  setTimeout(upd, 30); return p;
+};
+
+V.tilt = (v) => {
+  const p = el("div", "panel"), chips = el("div", "chips");
+  let cur = v.factors.findIndex(f => f.name === v.start.factor); if (cur < 0) cur = 0;
+  v.factors.forEach((f, k) => { const c = el("button", "chip", f.name); c.onclick = () => { cur = k; upd(); }; chips.appendChild(c); });
+  const body = el("div");
+  body.innerHTML = `<div class="slabel"><span id="tneg"></span><span id="tpos"></span></div>
+    <input type="range" id="ts" min="-1" max="1" step="0.05">
+    <div class="big num" id="tv"></div><p class="say" id="tsay"></p>`;
+  p.append(chips, body);
+  const ts = body.querySelector("#ts"); ts.value = v.start.value;
+  const upd = () => {
+    const f = v.factors[cur], x = +ts.value, a = Math.abs(x);
+    chips.querySelectorAll(".chip").forEach((c, k) => c.classList.toggle("on", k === cur));
+    body.querySelector("#tneg").textContent = "← " + f.neg; body.querySelector("#tpos").textContent = f.pos + " →";
+    const tv = body.querySelector("#tv"); tv.innerHTML = fmt(x) + `<small>${f.name}</small>`;
+    tv.style.color = a < 0.1 ? "#98A1AC" : x > 0 ? "#1F4E79" : "#B07A2A";
+    const strength = a < 0.1 ? "No real lean" : (a < 0.3 ? "A clear lean" : "A strong lean");
+    body.querySelector("#tsay").innerHTML = a < 0.1 ? `<b>${strength}</b> either way.` :
+      `<b>${strength}</b> toward ${x > 0 ? f.pos : f.neg}${x > 0 && f.name === "Momentum" && a >= .3 ? ": it chases what's been going up" : ""}.`;
+    const pct = (x + 1) / 2 * 100;
+    ts.style.background = `linear-gradient(90deg, #DCE3EA ${Math.min(50, pct)}%, ${x < 0 ? "#B07A2A" : "#DCE3EA"} ${Math.min(50, pct)}%, ${x < 0 ? "#B07A2A" : "#DCE3EA"} 50%, ${x > 0 ? "#1F4E79" : "#DCE3EA"} 50%, ${x > 0 ? "#1F4E79" : "#DCE3EA"} ${Math.max(50, pct)}%, #DCE3EA ${Math.max(50, pct)}%)`;
+  };
+  ts.oninput = upd; upd();
+  p.appendChild(el("p", "cap", "Drag the slider. Sign gives the direction; size gives the strength (under 0.1 slight, above 0.3 strong)."));
+  return p;
+};
+
+
+
+
+
+V.steps = (v) => {
+  const p = el("div", "panel"), ol = el("ol", "steps");
+  v.items.forEach((t, k) => { const li = el("li", null, t); li.style.animationDelay = (k * 120) + "ms"; ol.appendChild(li);
+    setTimeout(() => li.classList.add("tick"), 600 + k * 220); });
+  p.appendChild(ol); return p;
+};
+
+
+
+
+
+
+V.fallcalc = (v) => {
+  const p = el("div", "panel");
+  p.innerHTML = `<div class="slabel"><span>If it falls by</span><b class="num" id="fv"></b></div><input type="range" id="fs" min="5" max="90" step="5">
+    <div style="display:flex;gap:30px;justify-content:center;align-items:center;height:190px;margin-top:6px">
+      <div style="text-align:center"><div id="fb" style="width:58px;margin:0 auto;border-radius:3px 3px 8px 8px;background:#B54A3C;transition:height .35s"></div><div class="cap">fall</div></div>
+      <div style="text-align:center;align-self:flex-end"><div id="gb" style="width:58px;margin:0 auto;border-radius:8px 8px 3px 3px;background:#1F4E79;transition:height .35s"></div><div class="cap">needed to get back</div></div></div>
+    <p class="say" id="fsay"></p>`;
+  const fs = p.querySelector("#fs"); fs.value = v.start || 50;
+  const upd = () => { const f = +fs.value / 100, g = f / (1 - f);
+    p.querySelector("#fv").textContent = "−" + fs.value + "%";
+    p.querySelector("#fb").style.height = (f * 120) + "px"; p.querySelector("#gb").style.height = Math.min(170, g * 60) + "px";
+    p.querySelector("#fsay").innerHTML = `A <b>−${fs.value}%</b> fall needs a <b>+${(g * 100).toFixed(0)}%</b> gain just to get back to where it started.`; };
+  fs.oninput = upd; setTimeout(upd, 30); return p;
+};
+
+V.svg = (v) => {
+  const p = el("div", "panel"); p.innerHTML = v.svg;
+  setTimeout(() => {
+    p.querySelectorAll(".dr").forEach(path => { path.style.setProperty("--len", path.getTotalLength()); path.classList.add("draw"); });
+  }, 20);
+  if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p;
+};
+
+V.vega = (v) => {
+  const p = el("div", "panel real"), keys = v.specs ? Object.keys(v.specs) : null;
+  let cur = keys ? (v.specs[v.default] ? v.default : keys[0]) : null;
+  const chips = el("div", "chips"), box = el("div", "vg"), cap = el("p", "cap", v.cap || "");
+  if (keys && keys.length > 1) {
+    keys.forEach(k => { const c = el("button", "chip", k + (v.suffix || "")); c.dataset.k = k;
+      c.onclick = () => { cur = k; draw(); }; chips.appendChild(c); });
+    p.appendChild(chips);
+  }
+  p.append(box, cap);
+  function draw() {
+    chips.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c.dataset.k === cur));
+    const spec = keys ? v.specs[cur] : v.spec;
+    if (v.notes && v.notes[cur]) cap.innerHTML = v.notes[cur];
+    if (!spec || typeof vegaEmbed === "undefined") { box.innerHTML = "<div class='vg-miss'>The chart couldn't load here; you'll see it on the page.</div>"; return; }
+    box.innerHTML = "";
+    vegaEmbed(box, spec, { actions: false, renderer: "svg" }).catch(() => {
+      box.innerHTML = "<div class='vg-miss'>The chart couldn't load here; you'll see it on the page.</div>"; });
+  }
+  setTimeout(draw, 30); return p;
+};
+
+V.img = (v) => {
+  const p = el("div", "panel real"); const im = el("img"); im.src = v.src; im.alt = v.alt || "";
+  p.appendChild(im); if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p;
+};
+
+V.cards = (v) => {
+  const p = el("div", "panel real"), g = el("div", "facards" + (v.hl != null ? " hl" : ""));
+  v.items.forEach((c, k) => g.appendChild(el("div", "facard" + (k === v.hl ? " on" : ""),
+    `<small>${c.label}</small><b>${c.value}</b><span class="${c.tone || ""}">${c.sub}</span>`)));
+  p.appendChild(g); p.appendChild(el("p", "cap", "The cards at the top of the results, as the page shows them."));
+  return p;
+};
+
+V.regtable = (v) => {
+  const p = el("div", "panel real");
+  const rows = v.rows.map(r => `<tr><td>${r.term}</td><td>${r.coef.toFixed(4)}</td><td>${r.se.toFixed(4)}</td>
+    <td class="${Math.abs(r.t) >= 2 ? "sig" : ""}">${r.t.toFixed(2)}</td><td class="${r.p < 0.05 ? "sig" : ""}">${r.p.toFixed(4)}</td></tr>`).join("");
+  p.innerHTML = `<table class="regt"><thead><tr><th>Term</th><th>Coefficient</th><th>Std. error</th><th>t-stat</th><th>p-value</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="cap">${v.note || ""} Highlighted: |t| above 2 and p under 0.05, the terms drawn in colour on the chart.</p>`;
+  return p;
+};
+
+V.mock = (v) => { const p = el("div", "panel"); p.appendChild(el("div", "mock", v.html)); if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p; };
+
+V.tools = (v) => {
+  const p = el("div", "panel"), g = el("div", "tools");
+  v.items.forEach((t, k) => { const d = el("div", "tool", `${t.icon}<b>${t.name}</b><span>${t.q}</span>`); d.style.animationDelay = (k * 90) + "ms"; g.appendChild(d); });
+  p.appendChild(g); return p;
+};
+
+// ------------------------------------------------------------------ quiz
+function quiz(q, k) {
+  const box = el("div", "quiz"); box.appendChild(el("p", "qq", q.q));
+  const opts = el("div", "opts"); box.appendChild(opts);
+  q.options.forEach((o, n) => {
+    const b = el("button", "opt", `<i>${String.fromCharCode(65 + n)}</i><span>${o}</span>`);
+    b.onclick = () => {
+      const right = o === q.answer; if (!(k in answers)) answers[k] = right;
+      opts.querySelectorAll(".opt").forEach(x => { x.classList.remove("right", "wrong", "dim");
+        const t = x.querySelector("span").textContent;
+        if (t === q.answer && right) x.classList.add("right"); else if (x === b) x.classList.add("wrong"); else x.classList.add("dim"); });
+      b.querySelector("i").textContent = right ? "✓" : "✕";
+      if (right) { box.classList.add("answered"); b.classList.add("pop"); $("next").classList.add("nudge"); }
+      const old = box.querySelector(".why"); if (old) old.remove();
+      box.appendChild(el("p", "why " + (right ? "ok" : "no"), (right ? "<b>Right.</b> " : "<b>Not quite.</b> ") + (right ? q.why : ((q.wrong || {})[o] || q.why) + " Try again.")));
+      updateScore();
+    };
+    opts.appendChild(b);
+  });
+  return box;
+}
+function updateScore() {
+  const n = Object.keys(answers).length, r = Object.values(answers).filter(Boolean).length;
+  if (i === S.length - 1 && n) $("keys").innerHTML = `<span class="score">Quiz: ${r} of ${n} right first time</span>`;
+}
+
+// ------------------------------------------------------------------ render
+let current = null;
+function build(k) {
+  const s = S[k], hasVis = !!s.viz || (s.quiz && s.quizSide);
+  const node = el("section", "slide" + (hasVis ? "" : " solo"));
+  const t = el("div", "text");
+  t.appendChild(el("p", "eyebrow", `${s.chapter} · ${chapters.find(c => c.name === s.chapter).idx.indexOf(k) + 1} of ${chapters.find(c => c.name === s.chapter).idx.length}`));
+  t.appendChild(el("h2", null, s.title));
+  if (s.flag) t.appendChild(el("p", "flag", s.flag));
+  if (s.body) t.appendChild(el("div", "body", s.body));
+  if (s.quiz && !s.quizSide) t.appendChild(quiz(s.quiz, k));
+  if (s.take) t.appendChild(el("div", "take", `<span>${s.take}</span>`));
+  node.appendChild(t);
+  if (hasVis) {
+    const v = el("div", "vis");
+    if (s.viz && V[s.viz.type]) v.appendChild(V[s.viz.type](s.viz));
+    if (s.quiz && s.quizSide) { const p = el("div", "panel"); p.appendChild(quiz(s.quiz, k)); v.appendChild(p); }
+    node.appendChild(v);
+  }
+  return node;
+}
+function go(k, dir) {
+  if (k < 0 || k >= S.length || (k === i && current)) return;
+  dir = dir || (k > i ? 1 : -1);
+  const stage = $("stage");
+  if (current) { const old = current; old.classList.add(dir > 0 ? "leave-r" : "leave-l"); setTimeout(() => old.remove(), 300); }
+  i = k; current = build(k); current.classList.add(dir > 0 ? "enter-r" : "enter-l"); stage.appendChild(current);
+  drawChapters();
+  $("count").textContent = `${i + 1} / ${S.length}`;
+  $("back").disabled = i === 0;
+  const last = i === S.length - 1, nx = $("next");
+  nx.classList.remove("nudge");
+  nx.className = "btn" + (last ? " final" : ""); nx.innerHTML = last ? (D.cta.label + " →") : "Next →";
+  $("keys").innerHTML = 'Use <kbd>←</kbd> <kbd>→</kbd> to move';
+  updateScore();
+  try { localStorage.setItem("prism_tut_" + D.page, String(i)); } catch (e) {}
+}
+function finish() {
+  try {
+    const doc = window.parent.document;
+    const btn = doc.querySelector(`.st-key-tut_go_${D.page} button`);
+    if (btn) { btn.click(); return; }
+  } catch (e) {}
+  $("keys").innerHTML = "Close this window with × to carry on.";
+}
+$("next").onclick = () => (i === S.length - 1 ? finish() : go(i + 1, 1));
+$("back").onclick = () => go(i - 1, -1);
+function onKey(e) {
+  if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) && e.target.type !== "range") return;
+  if (e.key === "ArrowRight" && !(e.target && e.target.type === "range")) { e.preventDefault(); i < S.length - 1 && go(i + 1, 1); }
+  else if (e.key === "ArrowLeft" && !(e.target && e.target.type === "range")) { e.preventDefault(); go(i - 1, -1); }
+}
+document.addEventListener("keydown", onKey);
+try { window.parent.document.addEventListener("keydown", onKey); window.addEventListener("unload", () => window.parent.document.removeEventListener("keydown", onKey)); } catch (e) {}
+let tx = null;
+document.addEventListener("touchstart", e => { tx = e.touches[0].clientX; }, { passive: true });
+document.addEventListener("touchend", e => { if (tx == null) return; const dx = e.changedTouches[0].clientX - tx; tx = null;
+  if (e.target.type === "range") return; if (dx < -50) go(i + 1, 1); else if (dx > 50) go(i - 1, -1); }, { passive: true });
+go(i, 1);
+</script>
+</body>
+</html>
