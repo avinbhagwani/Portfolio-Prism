@@ -19,6 +19,7 @@ from pathlib import Path
 import streamlit as st
 
 from core import fbi_metrics as fm
+from views import auth
 from core import substack as sb
 from core.time_game import CONTESTANTS, MARKET
 
@@ -217,6 +218,7 @@ def _index():
 
 def render():
     st.markdown(CSS, unsafe_allow_html=True)
+    auth.control()
     _hero()
     _now()
     _index()
