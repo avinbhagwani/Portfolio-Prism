@@ -194,6 +194,24 @@ input[type=range]::-moz-range-thumb { width:20px; height:20px; border-radius:50%
 .quilt.hl .qt { opacity:.18; } .quilt.hl .qt.on { opacity:1; transform:scale(1.04); }
 .legend { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 0 0; }
 
+/* the tool's own charts and cards */
+.panel.real { background:#fff; border:1px solid var(--line); padding:14px 14px 12px 14px; }
+.vg { width:100%; min-height:120px; }
+.vg .vega-embed { width:100%; } .vg .vega-embed summary { display:none; }
+.vg-miss { font-size:13px; color:var(--muted); padding:30px 0; text-align:center; }
+.panel.real img { width:100%; display:block; border-radius:6px; }
+.facards { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.facard { background:var(--mist); border-radius:14px; padding:14px 16px 15px 16px; transition:box-shadow .3s, opacity .3s; }
+.facard small { display:block; font-size:12px; color:#8A939E; font-weight:500; margin-bottom:5px; }
+.facard b { font-size:26px; font-weight:600; color:#1B2533; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.facard span { display:block; font-size:12px; color:#6B7480; margin-top:3px; line-height:1.35; }
+.facard span.good { color:#2E7D4F; } .facard span.bad { color:#B54A3C; }
+.facards.hl .facard { opacity:.45; } .facards.hl .facard.on { opacity:1; box-shadow:0 0 0 2px var(--gold); }
+.regt { width:100%; border-collapse:collapse; font-size:12.5px; }
+.regt th { text-align:left; font-weight:500; color:var(--muted); font-size:11.5px; padding:6px 6px; border-bottom:1px solid #E6E9ED; }
+.regt td { padding:7px 6px; border-bottom:1px solid #F0F2F5; color:#1B2533; font-variant-numeric:tabular-nums; }
+.regt td.sig { color:var(--navy); font-weight:600; }
+
 /* mock UI */
 .mock { background:#fff; border-radius:14px; padding:14px; box-shadow:0 1px 2px rgba(20,30,50,.05); font-size:12.5px; }
 .mock .row { display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px 0; align-items:center; }
@@ -225,6 +243,9 @@ input[type=range]::-moz-range-thumb { width:20px; height:20px; border-radius:50%
   *, *::before, *::after { animation-duration:.01s !important; animation-delay:0s !important; transition-duration:.01s !important; }
 }
 </style>
+<script src="/app/static/vendor/vega.min.js"></script>
+<script src="/app/static/vendor/vega-lite.min.js"></script>
+<script src="/app/static/vendor/vega-embed.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -298,24 +319,6 @@ V.tiles = (v) => {
   p.appendChild(g); if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p;
 };
 
-V.gauge = (v) => {
-  const p = el("div", "panel"), g = el("div", "gauge");
-  const R = 120, cx = 150, cy = 140, arc = (a0, a1) => {
-    const p0 = [cx + R * Math.cos(Math.PI * (1 - a0)), cy - R * Math.sin(Math.PI * (1 - a0))];
-    const p1 = [cx + R * Math.cos(Math.PI * (1 - a1)), cy - R * Math.sin(Math.PI * (1 - a1))];
-    return `M${p0[0]} ${p0[1]} A${R} ${R} 0 0 1 ${p1[0]} ${p1[1]}`; };
-  const len = Math.PI * R * v.value / 100;
-  g.innerHTML = `<svg viewBox="0 0 300 160">
-    <path d="${arc(0, .6)}" stroke="#F0D9D3" stroke-width="16" fill="none"/>
-    <path d="${arc(.6, .8)}" stroke="#EDE3CF" stroke-width="16" fill="none"/>
-    <path d="${arc(.8, 1)}" stroke="#D9E5F0" stroke-width="16" fill="none"/>
-    <path class="draw" style="--len:${len}" d="${arc(0, v.value / 100)}" stroke="#1F4E79" stroke-width="16" stroke-linecap="round" fill="none"/>
-    <text x="22" y="158" font-size="11" fill="#98A1AC">0%</text><text x="278" y="158" font-size="11" fill="#98A1AC" text-anchor="end">100%</text>
-  </svg><div class="val"><div class="big num" id="gv">0%</div><div class="cap" style="margin:4px 0 0 0">explained by the factors</div></div>`;
-  setTimeout(() => countUp(g.querySelector("#gv"), v.value, 0, "", "%", 1200), 120);
-  const zones = el("div", "legend", `<span class="chip">Below 60%: read with care</span><span class="chip">60–80%: decent</span><span class="chip on">Above 80%: mostly explained</span>`);
-  p.append(g, zones); return p;
-};
 
 V.beta = (v) => {
   const p = el("div", "panel");
@@ -373,102 +376,9 @@ V.tilt = (v) => {
   return p;
 };
 
-V.bars = (v) => {
-  const p = el("div", "panel"), box = el("div", "bars"), cap = el("p", "cap", v.hint || "Hover a row for its range.");
-  const span = Math.max(0.6, ...v.rows.map(r => Math.max(Math.abs(r.lo), Math.abs(r.hi)))) * 1.08;
-  const X = (x) => 50 + 50 * Math.max(-1, Math.min(1, x / span));
-  v.rows.forEach((r, k) => {
-    const row = el("div", "bar");
-    const sig = r.p < 0.05, col = sig ? (r.coef >= 0 ? "#1F4E79" : "#B07A2A") : "#C3CAD2";
-    row.innerHTML = `<span class="lab">${r.label}</span><div class="btrack"><div class="zero"></div>
-      <div class="fill" style="left:50%;width:0;background:${col}"></div>
-      <div class="rng" style="left:${X(r.lo)}%;width:${X(r.hi) - X(r.lo)}%"></div></div><span class="v num">${fmt(r.coef)}</span>`;
-    const fill = row.querySelector(".fill");
-    setTimeout(() => { const a = X(Math.min(0, r.coef)), b = X(Math.max(0, r.coef)); fill.style.left = a + "%"; fill.style.width = Math.max(.6, b - a) + "%"; }, 80 + k * 70);
-    row.onmouseenter = () => { cap.innerHTML = `<b>${r.label} ${fmt(r.coef)}</b> · 95% range ${fmt(r.lo)} to ${fmt(r.hi)} · ${
-      r.p < 0.01 ? "strong evidence" : r.p < 0.05 ? "some evidence" : "could be noise: the range crosses zero"}`; };
-    box.appendChild(row);
-  });
-  setTimeout(() => box.classList.add("ready"), 200);
-  p.append(box, el("div", "key", `<span><i style="background:#1F4E79"></i>Significant, positive</span><span><i style="background:#B07A2A"></i>Significant, negative</span><span><i style="background:#C3CAD2"></i>Could be noise</span>`), cap);
-  return p;
-};
 
-V.alpha = (v) => {
-  const p = el("div", "panel"), span = Math.max(4, Math.abs(v.lo), Math.abs(v.hi)) * 1.15;
-  const X = (x) => 6 + 88 * (x + span) / (2 * span), luck = v.lo < 0 && v.hi > 0;
-  p.innerHTML = `<div class="big num" id="av">0%</div><div class="cap" style="margin:4px 0 18px 0">alpha a year, with its 95% range</div>
-    <div style="position:relative;height:70px">
-      <div style="position:absolute;left:6%;right:6%;top:34px;height:2px;background:#DDE3E9"></div>
-      <div style="position:absolute;left:${X(0)}%;top:18px;height:34px;width:1.5px;background:#98A1AC"></div>
-      <div style="position:absolute;left:${X(0)}%;top:56px;font-size:11px;color:#98A1AC;transform:translateX(-50%)">0</div>
-      <div id="arng" style="position:absolute;left:${X(v.a)}%;width:0;top:29px;height:12px;border-radius:6px;background:${luck ? "#D5DBE2" : "#BFD3E6"};transition:all .9s cubic-bezier(.2,.8,.2,1)"></div>
-      <div style="position:absolute;left:${X(v.a)}%;top:26px;width:18px;height:18px;margin-left:-9px;border-radius:50%;background:${luck ? "#98A1AC" : "#1F4E79"};border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2)"></div>
-      <div style="position:absolute;left:${X(v.lo)}%;top:0;font-size:11px;color:#66707C;transform:translateX(-50%)">${fmt(v.lo, 1)}%</div>
-      <div style="position:absolute;left:${X(v.hi)}%;top:0;font-size:11px;color:#66707C;transform:translateX(-50%)">${fmt(v.hi, 1)}%</div>
-    </div>
-    <p class="say">${luck ? "The range runs from negative to positive, so this alpha <b>could be luck</b>." : "The whole range sits on one side of zero, so this alpha is <b>statistically meaningful</b>."}</p>`;
-  setTimeout(() => { const r = p.querySelector("#arng"); r.style.left = X(v.lo) + "%"; r.style.width = (X(v.hi) - X(v.lo)) + "%"; countUp(p.querySelector("#av"), v.a, 1, v.a >= 0 ? "+" : "", "%"); }, 120);
-  return p;
-};
 
-V.rolling = (v) => {
-  const p = el("div", "panel chart"), wins = Object.keys(v.windows);
-  let cur = v.windows[v.default] ? v.default : wins[0];
-  const chips = el("div", "chips"); if (wins.length > 1) p.appendChild(chips);
-  wins.forEach(w => { const c = el("button", "chip", w + " windows"); c.onclick = () => { cur = w; draw(); }; chips.appendChild(c); });
-  const box = el("div"); box.style.position = "relative"; p.appendChild(box);
-  const cap = el("p", "cap", "Hover the line. Navy dots are significant; grey could be noise."); p.appendChild(cap);
-  const W = 520, H = 230, L = 34, R = 10, T = 14, B = 26;
-  function draw() {
-    chips.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c.textContent.startsWith(cur)));
-    const pts = v.windows[cur].map(([d, y, pv]) => ({ t: new Date(d).getTime(), d, y, pv }));
-    const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
-    const ys = pts.map(q => q.y); let y0 = Math.min(0, ...ys), y1 = Math.max(...ys);
-    const pad = (y1 - y0) * .1 || .1; y0 -= pad; y1 += pad;
-    const x = (t) => L + (W - L - R) * (t - t0) / (t1 - t0), y = (q) => T + (H - T - B) * (1 - (q - y0) / (y1 - y0));
-    const path = pts.map((q, k) => (k ? "L" : "M") + x(q.t).toFixed(1) + " " + y(q.y).toFixed(1)).join("");
-    let ticks = "", step = (y1 - y0) > 1 ? .5 : (y1 - y0) > .5 ? .2 : .1;
-    for (let g = Math.ceil(y0 / step) * step; g <= y1; g += step) ticks += `<line x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}" stroke="${Math.abs(g) < 1e-9 ? "#B9C2CC" : "#EEF1F4"}"/><text x="${L - 6}" y="${y(g) + 4}" font-size="10.5" fill="#98A1AC" text-anchor="end">${g.toFixed(1).replace("-", "−")}</text>`;
-    let years = ""; const ya = new Date(t0).getFullYear(), yb = new Date(t1).getFullYear(), ystep = Math.ceil((yb - ya) / 6);
-    for (let yr = ya + 1; yr <= yb; yr += ystep) { const tx = x(new Date(yr + "-01-01").getTime()); years += `<text x="${tx}" y="${H - 6}" font-size="10.5" fill="#98A1AC" text-anchor="middle">${yr}</text>`; }
-    let mark = "";
-    if (v.marker) { const mx = x(new Date(v.marker.date).getTime()); if (mx > L && mx < W - R) mark = `<line x1="${mx}" x2="${mx}" y1="${T}" y2="${H - B}" stroke="#B54A3C" stroke-dasharray="4 3"/><text x="${mx + 5}" y="${T + 10}" font-size="11" fill="#B54A3C">${v.marker.label}</text>`; }
-    const dots = pts.map(q => `<circle cx="${x(q.t).toFixed(1)}" cy="${y(q.y).toFixed(1)}" r="2.3" fill="${q.pv < 0.05 ? "#1F4E79" : "#C3CAD2"}"/>`).join("");
-    box.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${ticks}${years}${mark}
-      <text x="${L}" y="${T - 4}" font-size="10.5" fill="#66707C">${v.label}</text>
-      <path class="draw" d="${path}" fill="none" stroke="#1F4E79" stroke-opacity=".55" stroke-width="1.6"/>
-      <g class="fade" style="animation-delay:.6s">${dots}</g>
-      <line id="cx" y1="${T}" y2="${H - B}" stroke="#17212D" stroke-opacity=".25" style="display:none"/>
-      <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/></svg><div class="tip" id="tip"></div>`;
-    const sv = box.querySelector("svg"), pth = sv.querySelector("path.draw"); pth.style.setProperty("--len", pth.getTotalLength());
-    const tip = box.querySelector("#tip"), cl = sv.querySelector("#cx");
-    sv.querySelector("#hit").onmousemove = (e) => {
-      const r = sv.getBoundingClientRect(), mx = (e.clientX - r.left) * W / r.width;
-      const tt = t0 + (mx - L) / (W - L - R) * (t1 - t0); let q = pts[0];
-      for (const z of pts) if (Math.abs(z.t - tt) < Math.abs(q.t - tt)) q = z;
-      const px = x(q.t) * r.width / W, py = y(q.y) * r.height / H;
-      cl.setAttribute("x1", x(q.t)); cl.setAttribute("x2", x(q.t)); cl.style.display = "";
-      tip.style.left = px + "px"; tip.style.top = py + "px"; tip.style.opacity = 1;
-      tip.textContent = `${new Date(q.d).toLocaleDateString("en-GB", { month: "short", year: "numeric" })}: ${fmt(q.y)}${q.pv < 0.05 ? "" : " (noise)"}`;
-    };
-    sv.querySelector("#hit").onmouseleave = () => { tip.style.opacity = 0; cl.style.display = "none"; };
-    if (v.notes && v.notes[cur]) cap.innerHTML = v.notes[cur];
-  }
-  setTimeout(draw, 20); return p;
-};
 
-V.table = (v) => {
-  const p = el("div", "panel");
-  const rows = v.rows.map((r, k) => { const big = Math.abs(r.t) >= 2;
-    return `<tr class="fade" style="animation-delay:${k * 60}ms"><td style="padding:7px 4px">${r.term}</td><td class="num" style="text-align:right">${fmt(r.coef, 3)}</td>
-      <td class="num" style="text-align:right;color:#98A1AC">${r.se.toFixed(3)}</td>
-      <td style="padding-left:12px;width:38%"><div style="display:flex;align-items:center;gap:8px"><div style="height:8px;border-radius:4px;background:${big ? "#1F4E79" : "#C3CAD2"};width:${Math.min(100, Math.abs(r.t) / 8 * 100)}%"></div><span class="num" style="font-size:12px;color:${big ? "#1F4E79" : "#98A1AC"}">${r.t.toFixed(1)}</span></div></td></tr>`; }).join("");
-  p.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="color:#98A1AC;font-size:11.5px;text-align:left">
-    <th style="font-weight:500;padding-bottom:6px">Term</th><th style="font-weight:500;text-align:right">Coef.</th><th style="font-weight:500;text-align:right">Std. err.</th><th style="font-weight:500;padding-left:12px">t-stat</th></tr></thead><tbody>${rows}</tbody></table>
-    <p class="cap">A t-stat beyond about ±2 (navy) is what makes a bar significant on the page.</p>`;
-  return p;
-};
 
 V.steps = (v) => {
   const p = el("div", "panel"), ol = el("ol", "steps");
@@ -477,73 +387,10 @@ V.steps = (v) => {
   p.appendChild(ol); return p;
 };
 
-V.growth = (v) => {
-  const p = el("div", "panel"), max = Math.max(...v.items.map(t => t.value));
-  const row = el("div"); row.style.cssText = "display:flex;gap:28px;align-items:flex-end;height:220px;justify-content:center";
-  v.items.forEach((t, k) => {
-    const c = el("div"); c.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:8px;width:120px";
-    const lab = el("div", "num", "₹1 lakh"); lab.style.cssText = "font-size:20px;font-weight:600";
-    const bar = el("div"); bar.style.cssText = `width:64px;height:6px;border-radius:8px 8px 3px 3px;background:${t.color};transition:height 1.1s cubic-bezier(.2,.8,.2,1) ${k * .15}s`;
-    c.append(lab, bar, el("div", "cap", t.name)); c.lastChild.style.cssText = "margin:0;text-align:center";
-    row.appendChild(c);
-    setTimeout(() => { bar.style.height = Math.max(6, 160 * t.value / max) + "px"; countUp(lab, t.value, 0, "₹", " lakh", 1100); }, 120);
-  });
-  p.appendChild(row); if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p;
-};
 
-V.hit = (v) => {
-  const p = el("div", "panel"), sq = el("div", "sq"), n = Math.round(v.pct);
-  for (let k = 0; k < 100; k++) sq.appendChild(el("span"));
-  const big = el("div", "big num", "0%");
-  p.append(big, el("div", "cap", v.label), sq, el("p", "cap", "Each square is 1% of all the rolling periods. Navy: it won."));
-  p.children[1].style.margin = "4px 0 14px 0";
-  const sp = sq.querySelectorAll("span");
-  setTimeout(() => { countUp(big, v.pct, 0, "", "%", 1200); for (let k = 0; k < n; k++) setTimeout(() => sp[k].classList.add("on"), reduce ? 0 : k * 11); }, 150);
-  return p;
-};
 
-V.worst = (v) => {
-  const p = el("div", "panel"), row = el("div"); row.style.cssText = "display:flex;gap:26px;justify-content:center;align-items:flex-start;height:250px";
-  v.items.forEach((t, k) => {
-    const c = el("div"); c.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;width:130px";
-    const lab = el("div", "num", "0%"); lab.style.cssText = "font-size:20px;font-weight:600;color:#B54A3C";
-    const bar = el("div"); bar.style.cssText = `width:62px;height:0;border-radius:3px 3px 8px 8px;background:linear-gradient(#E9B4AA,#B54A3C);transition:height 1.1s cubic-bezier(.2,.8,.2,1) ${k * .15}s`;
-    c.append(el("div", "cap", t.name), bar, lab, el("div", "cap", t.sub || ""));
-    c.children[0].style.cssText = "margin:0;font-weight:500;color:#17212D;text-align:center"; c.lastChild.style.cssText = "margin:0;text-align:center";
-    row.appendChild(c);
-    setTimeout(() => { bar.style.height = (Math.abs(t.depth) * 1.7) + "px"; countUp(lab, t.depth, 1, "", "%", 1100); }, 120);
-  });
-  p.appendChild(row); return p;
-};
 
-V.capture = (v) => {
-  const p = el("div", "panel"), max = Math.max(140, v.up, v.down) * 1.05;
-  const row = (lab, val, good) => `<div style="margin:0 0 18px 0"><div class="slabel"><span>${lab}</span><b class="num" style="color:${good ? "#1F4E79" : "#B54A3C"}">${val.toFixed(0)}%</b></div>
-    <div style="position:relative;height:14px;background:#E3E8EE;border-radius:7px;margin-top:8px">
-      <div class="cfill" data-w="${val / max * 100}" style="position:absolute;left:0;top:0;bottom:0;width:0;border-radius:7px;background:${good ? "#1F4E79" : "#B54A3C"};transition:width 1s cubic-bezier(.2,.8,.2,1)"></div>
-      <div style="position:absolute;left:${100 / max * 100}%;top:-5px;bottom:-5px;width:2px;background:#17212D"></div></div></div>`;
-  p.innerHTML = row(`Gains captured in up months`, v.up, v.up >= 100) + row(`Losses taken in down months`, v.down, v.down <= 100)
-    + `<p class="cap">The black line is 100%: exactly what the ${v.bench} did. Best case: long navy bar on top, short bar below.</p>`;
-  setTimeout(() => p.querySelectorAll(".cfill").forEach(f => f.style.width = f.dataset.w + "%"), 120);
-  return p;
-};
 
-V.quilt = (v) => {
-  const p = el("div", "panel"), q = el("div", "quilt"), cols = { };
-  const palette = ["#1F4E79", "#B07A2A", "#2F8F9D", "#5E9A62", "#8E5B9F"]; v.names.forEach((n, k) => cols[n] = palette[k % 5]);
-  q.style.gridTemplateColumns = `repeat(${v.years.length}, 1fr)`;
-  v.years.forEach((y, k) => {
-    const c = el("div", "qcol"); c.style.animationDelay = (k * 70) + "ms"; c.appendChild(el("small", null, y.year));
-    y.ranked.forEach(r => { const t = el("div", "qt", r.ret.toFixed(0)); t.style.background = cols[r.name]; t.dataset.n = r.name; t.title = `${r.name}: ${fmt(r.ret, 1)}%`; c.appendChild(t); });
-    q.appendChild(c);
-  });
-  const lg = el("div", "legend");
-  v.names.forEach(n => { const c = el("button", "chip", `<i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${cols[n]};margin-right:6px"></i>${n}`);
-    c.onmouseenter = c.onfocus = () => { q.classList.add("hl"); q.querySelectorAll(".qt").forEach(t => t.classList.toggle("on", t.dataset.n === n)); };
-    c.onmouseleave = () => q.classList.remove("hl"); lg.appendChild(c); });
-  p.append(q, lg, el("p", "cap", "Each column is a year, best at the top. Hover a name to follow it."));
-  return p;
-};
 
 V.fallcalc = (v) => {
   const p = el("div", "panel");
@@ -566,6 +413,50 @@ V.svg = (v) => {
     p.querySelectorAll(".dr").forEach(path => { path.style.setProperty("--len", path.getTotalLength()); path.classList.add("draw"); });
   }, 20);
   if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p;
+};
+
+V.vega = (v) => {
+  const p = el("div", "panel real"), keys = v.specs ? Object.keys(v.specs) : null;
+  let cur = keys ? (v.specs[v.default] ? v.default : keys[0]) : null;
+  const chips = el("div", "chips"), box = el("div", "vg"), cap = el("p", "cap", v.cap || "");
+  if (keys && keys.length > 1) {
+    keys.forEach(k => { const c = el("button", "chip", k + (v.suffix || "")); c.dataset.k = k;
+      c.onclick = () => { cur = k; draw(); }; chips.appendChild(c); });
+    p.appendChild(chips);
+  }
+  p.append(box, cap);
+  function draw() {
+    chips.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c.dataset.k === cur));
+    const spec = keys ? v.specs[cur] : v.spec;
+    if (v.notes && v.notes[cur]) cap.innerHTML = v.notes[cur];
+    if (!spec || typeof vegaEmbed === "undefined") { box.innerHTML = "<div class='vg-miss'>The chart couldn't load here; you'll see it on the page.</div>"; return; }
+    box.innerHTML = "";
+    vegaEmbed(box, spec, { actions: false, renderer: "svg" }).catch(() => {
+      box.innerHTML = "<div class='vg-miss'>The chart couldn't load here; you'll see it on the page.</div>"; });
+  }
+  setTimeout(draw, 30); return p;
+};
+
+V.img = (v) => {
+  const p = el("div", "panel real"); const im = el("img"); im.src = v.src; im.alt = v.alt || "";
+  p.appendChild(im); if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p;
+};
+
+V.cards = (v) => {
+  const p = el("div", "panel real"), g = el("div", "facards" + (v.hl != null ? " hl" : ""));
+  v.items.forEach((c, k) => g.appendChild(el("div", "facard" + (k === v.hl ? " on" : ""),
+    `<small>${c.label}</small><b>${c.value}</b><span class="${c.tone || ""}">${c.sub}</span>`)));
+  p.appendChild(g); p.appendChild(el("p", "cap", "The cards at the top of the results, as the page shows them."));
+  return p;
+};
+
+V.regtable = (v) => {
+  const p = el("div", "panel real");
+  const rows = v.rows.map(r => `<tr><td>${r.term}</td><td>${r.coef.toFixed(4)}</td><td>${r.se.toFixed(4)}</td>
+    <td class="${Math.abs(r.t) >= 2 ? "sig" : ""}">${r.t.toFixed(2)}</td><td class="${r.p < 0.05 ? "sig" : ""}">${r.p.toFixed(4)}</td></tr>`).join("");
+  p.innerHTML = `<table class="regt"><thead><tr><th>Term</th><th>Coefficient</th><th>Std. error</th><th>t-stat</th><th>p-value</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="cap">${v.note || ""} Highlighted: |t| above 2 and p under 0.05, the terms drawn in colour on the chart.</p>`;
+  return p;
 };
 
 V.mock = (v) => { const p = el("div", "panel"); p.appendChild(el("div", "mock", v.html)); if (v.cap) p.appendChild(el("p", "cap", v.cap)); return p; };

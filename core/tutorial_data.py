@@ -60,12 +60,14 @@ def _fund_example():
         rows.append({"key": f, "label": FACTOR_LABELS[f], "coef": c, "se": se,
                      "lo": c - 1.96 * se, "hi": c + 1.96 * se, "p": float(m.pvalues[f])})
 
-    path, windows = {}, {}
+    path, windows, specs = {}, {}, {}
     for label, months in (("1Y", 12), ("3Y", 36), ("5Y", 60)):
         roll = rolling(res["data"], tuple(factors), months)
         if roll is None or roll.empty:
             continue
         s = roll["HML"].dropna()
+        from core.tutorial_charts import rolling_spec
+        specs[label] = rolling_spec(roll, "HML", "Value")
         windows[label] = [(d.strftime("%Y-%m-%d"), float(v), float(roll.loc[d, "HML_P"])) for d, v in s.items()]
         if label == "3Y":
             at_exit = s.loc[:JAIN_EXIT]
@@ -92,6 +94,7 @@ def _fund_example():
         "factors": rows,
         "rolling": path,
         "windows": windows,
+        "roll_specs": {k: v for k, v in specs.items() if v},
     }
 
 
