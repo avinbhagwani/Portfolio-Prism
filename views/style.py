@@ -157,6 +157,28 @@ button[data-testid="stBaseButton-secondary"] {{
   border-radius:999px !important; border-color:var(--line) !important;
 }}
 
+/* ---------- tour pill and tab links (views/tutorial.py) ---------- */
+[class*="st-key-tutpill_"] {{ margin:-1.1rem 0 1.4rem 0; position:relative; }}
+[class*="st-key-tutpill_"][class*="home"], [class*="st-key-tutpill_"][class*="try-to-time"],
+[class*="st-key-tutpill_"][class*="can-you-handle-it"] {{ margin:0.3rem 0 0.6rem 0; }}
+[class*="st-key-tutpill_"] button {{
+  background:var(--mist) !important; border:none !important; border-radius:999px !important;
+  min-height:2rem !important; padding:0.25rem 0.95rem 0.25rem 0.75rem !important;
+  transition:background 150ms ease, transform 150ms ease;
+}}
+[class*="st-key-tutpill_"] button:hover {{ background:#E8EEF4 !important; transform:translateY(-1px); }}
+[class*="st-key-tutpill_"] button p {{ font-size:0.85rem !important; font-weight:500 !important; color:var(--navy) !important; }}
+[class*="st-key-tutpill_"] button [data-testid="stIconMaterial"] {{ color:#B07A2A !important; font-size:1.05rem !important; }}
+[class*="st-key-tutpill_new_"] button::after {{
+  content:""; width:7px; height:7px; border-radius:50%; background:#C9A25A; margin-left:7px;
+  animation:tutping 1.8s ease-in-out infinite;
+}}
+@keyframes tutping {{ 0%,100% {{ box-shadow:0 0 0 0 rgba(201,162,90,.55); }} 60% {{ box-shadow:0 0 0 6px rgba(201,162,90,0); }} }}
+[class*="st-key-tut_tab_"] {{ margin:0.4rem 0 -0.4rem 0; }}
+[class*="st-key-tut_tab_"] button p {{ font-size:0.82rem !important; color:var(--faint) !important; }}
+[class*="st-key-tut_tab_"] button:hover p {{ color:var(--navy) !important; }}
+[class*="st-key-tut_tab_"] button [data-testid="stIconMaterial"] {{ color:var(--faint) !important; font-size:1rem !important; }}
+
 /* ---------- dialogs ---------- */
 div[role="dialog"] {{ border-radius:18px !important; }}
 

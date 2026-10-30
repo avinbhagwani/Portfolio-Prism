@@ -1,84 +1,34 @@
 """
-Page tutorials: a short slide deck for every page, opened from a
-"Take the tour" button under each page title, and from a small
-"How to read this tab" link inside each tab (which opens the deck at
-that tab's chapter).
+Page tutorials: a short, interactive slide deck for every page.
 
-  launcher(page)          the tour button, placed under a page header
-  tab_link(page, chapter) the in-tab link
-  maybe_open(page)        called once per run from app.py, before the
-                          page renders: applies any "try it" prefill and
-                          shows the deck if one is open for this page
+  launcher(page)          a "1-minute tour" pill under the page title
+                          (with a small gold dot until it's been opened)
+  tab_link(page, chapter) "How to read this tab", opening the deck at that
+                          tab's chapter
+  maybe_open(page)        called once per run from app.py before the page
+                          renders: applies any "try it" prefill and shows
+                          the deck if one is open for this page
 
-Decks are built from live data where it helps (core/tutorial_data.py):
-the Factor Analysis deck walks through HDFC Flexi Cap, the fund from the
-PRISM launch post on my Substack. Quizzes give instant feedback. Game
-decks explain how to play and never give away an ending.
+The deck itself runs in the browser (static/tutorial.html in st.iframe,
+like the games), so moving between slides, quizzes and sliders is
+instant and animated, with arrow keys and swipe. The last slide's button
+clicks a hidden Streamlit button (the iframe is same-origin) to close the
+deck and, on Factor Analysis, fill in the example fund.
 
-Design: light and minimal, navy for right/better, rust for wrong/losses.
+Live examples come from core/tutorial_data.py: HDFC Flexi Cap (the fund
+from the PRISM launch post on my Substack) and real Nifty index history.
+Game decks explain how to play and never give away an ending.
 """
 
-import altair as alt
-import pandas as pd
+import json
+import random
+from pathlib import Path
+
 import streamlit as st
 
 from core import tutorial_data as td
 
-NAVY, RUST, INK, MUTED, FAINT, LINE, MIST = (
-    "#1F4E79", "#B54A3C", "#17212D", "#66707C", "#98A1AC", "#E6EAEF", "#F4F6F9")
-
-CSS = """
-<style>
-.tut-eyebrow {font-size:0.76rem; font-weight:600; color:#B07A2A; letter-spacing:0.02em; margin:0 0 0.3rem 0;}
-.tut-title {font-size:1.45rem; font-weight:600; color:#17212D; line-height:1.22; letter-spacing:-0.015em;
-  margin:0 0 0.7rem 0;}
-.tut-body {font-size:0.98rem; line-height:1.6; color:#3A4552; margin:0 0 0.9rem 0;}
-.tut-body b {color:#17212D; font-weight:600;}
-.tut-flag {font-size:0.8rem; color:#B54A3C; margin:0 0 0.6rem 0;}
-.tut-tiles {display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:0.4rem 0 1rem 0;}
-.tut-tile {background:#F4F6F9; border-radius:12px; padding:12px 14px;}
-.tut-tile small {display:block; font-size:0.75rem; color:#66707C; margin-bottom:4px;}
-.tut-tile b {font-size:1.55rem; font-weight:600; color:#17212D; letter-spacing:-0.02em; font-variant-numeric:tabular-nums;}
-.tut-tile span {display:block; font-size:0.78rem; color:#66707C; margin-top:3px;}
-.tut-eq {display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0.4rem 0 1rem 0;}
-.tut-eq i {font-style:normal; color:#98A1AC; font-weight:600;}
-.tut-chip {background:#F4F6F9; border-radius:999px; padding:5px 12px; font-size:0.86rem; color:#17212D;}
-.tut-chip.lead {background:#1F4E79; color:#fff;} .tut-chip.alpha {background:#F3E6CF; color:#6B4A12;}
-.tut-list {margin:0 0 1rem 0; padding:0; list-style:none;}
-.tut-list li {display:grid; grid-template-columns:118px 1fr 1fr; gap:10px; padding:8px 0;
-  border-bottom:1px solid #EEF1F4; font-size:0.9rem; color:#3A4552;}
-.tut-list li b {color:#17212D; font-weight:600;}
-.tut-list li.head {font-size:0.76rem; color:#98A1AC; padding-top:0;}
-.tut-steps {counter-reset:s; margin:0.2rem 0 1rem 0; padding:0; list-style:none;}
-.tut-steps li {counter-increment:s; position:relative; padding:8px 0 8px 38px; font-size:0.95rem;
-  color:#3A4552; border-bottom:1px solid #EEF1F4; line-height:1.45;}
-.tut-steps li::before {content:counter(s); position:absolute; left:0; top:7px; width:26px; height:26px;
-  border-radius:50%; background:#1F4E79; color:#fff; font-size:0.8rem; font-weight:600;
-  display:flex; align-items:center; justify-content:center;}
-.tut-steps li b {color:#17212D;}
-.tut-bars {margin:0.3rem 0 0.6rem 0;}
-.tut-bar {display:grid; grid-template-columns:96px 1fr 64px; align-items:center; gap:10px; height:30px;}
-.tut-bar .lab {font-size:0.86rem; color:#17212D;}
-.tut-bar .val {font-size:0.86rem; color:#17212D; text-align:right; font-variant-numeric:tabular-nums;}
-.tut-track {position:relative; height:100%;}
-.tut-track .zero {position:absolute; left:50%; top:3px; bottom:3px; width:1px; background:#C9D0D8;}
-.tut-track .fill {position:absolute; top:9px; height:12px; border-radius:3px;}
-.tut-track .rng {position:absolute; top:14px; height:2px; background:#17212D; opacity:0.45;}
-.tut-legend {font-size:0.78rem; color:#98A1AC; margin:0 0 1rem 0;}
-.tut-ok {color:#1F4E79; font-size:0.94rem; line-height:1.5; margin:0.2rem 0 0.8rem 0;}
-.tut-no {color:#B54A3C; font-size:0.94rem; line-height:1.5; margin:0.2rem 0 0.8rem 0;}
-.tut-ok b, .tut-no b {font-weight:600;}
-.tut-dots {display:flex; gap:5px; justify-content:center; align-items:center; height:100%; flex-wrap:wrap;}
-.tut-dots span {width:7px; height:7px; border-radius:50%; background:#DDE2E8;}
-.tut-dots span.on {background:#1F4E79; width:18px; border-radius:4px;}
-.tut-dots span.done {background:#9FB7CF;}
-.tut-hit {display:grid; grid-template-columns:repeat(20, 1fr); gap:3px; margin:0.3rem 0 0.4rem 0; max-width:420px;}
-.tut-hit span {aspect-ratio:1; border-radius:2px; background:#E6EAEF;}
-.tut-hit span.on {background:#1F4E79;}
-.tut-svg {width:100%; max-width:520px; display:block; margin:0.2rem 0 0.9rem 0;}
-[class*="st-key-tutnav"] button p {font-size:0.85rem;}
-</style>
-"""
+STATIC = Path(__file__).resolve().parent.parent / "static"
 
 
 # =====================================================================
@@ -89,6 +39,7 @@ def _open(page, step=0):
     """step: a slide index, or a chapter name to open at."""
     st.session_state["tut_page"] = page
     st.session_state["tut_step"] = step
+    st.session_state.setdefault("tut_seen", set()).add(page)
 
 
 def _close():
@@ -96,10 +47,12 @@ def _close():
     st.session_state.pop("tut_step", None)
 
 
-def launcher(page, label="Take the 1-minute tour"):
-    """The tour button under a page header."""
-    st.button(label, key=f"tut_launch_{page}", type="tertiary", icon=":material/school:",
-              on_click=_open, args=(page, 0))
+def launcher(page, label="1-minute tour"):
+    """The tour pill under a page header."""
+    new = page not in st.session_state.get("tut_seen", set())
+    with st.container(key=f"tutpill_{'new_' if new else ''}{page}", width="content"):
+        st.button(label, key=f"tut_launch_{page}", icon=":material/school:",
+                  on_click=_open, args=(page, 0))
 
 
 def tab_link(page, chapter):
@@ -115,8 +68,7 @@ def maybe_open(page):
     for key, value in st.session_state.pop("tut_prefill", {}).items():
         st.session_state[key] = value
     if st.session_state.get("tut_page") == page and page in DECKS:
-        title = DECKS[page]["title"]
-        st.dialog(title, width="large", on_dismiss=_close)(_deck)(page)
+        st.dialog(DECKS[page]["title"], width="large", on_dismiss=_close)(_deck)(page)
     elif "tut_page" in st.session_state and st.session_state["tut_page"] != page:
         _close()                               # left the page with a deck open
 
@@ -125,9 +77,13 @@ def maybe_open(page):
 # The deck
 # =====================================================================
 
+@st.cache_resource(show_spinner=False)
+def _template():
+    return (STATIC / "tutorial.html").read_text(encoding="utf-8")
+
+
 def _slides(page):
-    """Slides are built lazily and cached per session, so live numbers
-    load once, when the deck first opens."""
+    """Built once per session per page, so live numbers load once."""
     cache = st.session_state.setdefault("_tut_slides", {})
     if page not in cache:
         with st.spinner("Loading a live example..."):
@@ -135,78 +91,25 @@ def _slides(page):
     return cache[page]
 
 
-def _go(delta, n):
-    st.session_state["tut_step"] = max(0, min(n - 1, st.session_state.get("tut_step", 0) + delta))
-
-
-def _jump(i):
-    st.session_state["tut_step"] = i
-
-
 def _deck(page):
-    st.markdown(CSS, unsafe_allow_html=True)
     slides = _slides(page)
-    n = len(slides)
     step = st.session_state.get("tut_step", 0)
-    if isinstance(step, str):                  # opened from a tab: jump to its chapter
-        step = next((k for k, x in enumerate(slides) if x["chapter"] == step), 0)
-        st.session_state["tut_step"] = step
-    i = min(step, n - 1)
-    s = slides[i]
+    if isinstance(step, str):                  # opened from a tab: start at its chapter
+        step = next((k for k, s in enumerate(slides) if s["chapter"] == step), 0)
+    deck = DECKS[page]
+    data = {"page": page, "slides": slides, "start": step,
+            "cta": {"label": deck.get("cta", "Done")}}
+    payload = json.dumps(data, default=str).replace("</", "<\\/")
+    st.iframe(_template().replace("__DATA__", payload), height="content")
 
-    chapters = list(dict.fromkeys(x["chapter"] for x in slides))
-    if len(chapters) > 1:
-        with st.container(key=f"tutnav_{page}", horizontal=True, gap="small"):
-            for ch in chapters:
-                first = next(k for k, x in enumerate(slides) if x["chapter"] == ch)
-                st.button(ch, key=f"tut_ch_{page}_{ch}", on_click=_jump, args=(first,),
-                          type="primary" if ch == s["chapter"] else "secondary")
-
-    in_ch = [k for k, x in enumerate(slides) if x["chapter"] == s["chapter"]]
-    st.markdown(f"<div class='tut-eyebrow'>{s['chapter']} · {in_ch.index(i) + 1} of {len(in_ch)}</div>"
-                f"<div class='tut-title'>{s['title']}</div>", unsafe_allow_html=True)
-    if s.get("flag"):
-        st.markdown(f"<div class='tut-flag'>{s['flag']}</div>", unsafe_allow_html=True)
-    if s.get("body"):
-        st.markdown(f"<div class='tut-body'>{s['body']}</div>", unsafe_allow_html=True)
-    if s.get("html"):
-        st.markdown(s["html"], unsafe_allow_html=True)
-    if s.get("chart") is not None:
-        st.altair_chart(s["chart"], theme=None, width="stretch")
-    if s.get("after"):
-        st.markdown(f"<div class='tut-body'>{s['after']}</div>", unsafe_allow_html=True)
-    if s.get("quiz"):
-        _quiz(page, i, s["quiz"])
-
-    st.write("")
-    b, mid, nx = st.columns([1, 2.4, 1], vertical_alignment="center")
-    with b:
-        st.button("Back", key=f"tut_back_{page}", icon=":material/arrow_back:", disabled=i == 0,
-                  on_click=_go, args=(-1, n), width="stretch")
-    with mid:
-        dots = "".join(f"<span class='{'on' if k == i else 'done' if k < i else ''}'></span>"
-                       for k in range(n))
-        st.markdown(f"<div class='tut-dots'>{dots}</div>", unsafe_allow_html=True)
-    with nx:
-        if i < n - 1:
-            st.button("Next", key=f"tut_next_{page}", type="primary", icon=":material/arrow_forward:",
-                      icon_position="right", on_click=_go, args=(1, n), width="stretch")
-        elif st.button(s.get("cta", "Got it"), key=f"tut_done_{page}", type="primary", width="stretch"):
-            if s.get("prefill"):
-                st.session_state["tut_prefill"] = s["prefill"]
+    # hidden: the deck's last button clicks this one
+    st.markdown("<style>.st-key-tut_hidden{display:none!important}</style>", unsafe_allow_html=True)
+    with st.container(key="tut_hidden"):
+        if st.button("finish", key=f"tut_go_{page}"):
+            if deck.get("prefill"):
+                st.session_state["tut_prefill"] = deck["prefill"]
             _close()
             st.rerun()
-
-
-def _quiz(page, i, q):
-    pick = st.pills(q["q"], q["options"], key=f"tut_q_{page}_{i}")
-    if pick is None:
-        st.markdown("<div class='tut-legend'>Pick an answer.</div>", unsafe_allow_html=True)
-    elif pick == q["answer"]:
-        st.markdown(f"<div class='tut-ok'><b>Right.</b> {q['why']}</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div class='tut-no'><b>Not quite.</b> {q.get('wrong', {}).get(pick, q['why'])}</div>",
-                    unsafe_allow_html=True)
 
 
 def slide(chapter, title, body=None, **extra):
@@ -214,144 +117,114 @@ def slide(chapter, title, body=None, **extra):
 
 
 # =====================================================================
-# Small visuals
+# Formatting and small visuals
 # =====================================================================
 
 def _pct(x, d=1, signed=False):
-    s = f"{x:+.{d}f}%" if signed else f"{x:.{d}f}%"
-    return s.replace("-", "−")
+    return (f"{x:+.{d}f}%" if signed else f"{x:.{d}f}%").replace("-", "−")
 
 
 def _num(x, d=2, signed=True):
     return (f"{x:+.{d}f}" if signed else f"{x:.{d}f}").replace("-", "−")
 
 
-def _tiles(items):
-    return "<div class='tut-tiles'>" + "".join(
-        f"<div class='tut-tile'><small>{a}</small><b>{b}</b><span>{c}</span></div>" for a, b, c in items
-    ) + "</div>"
+def _steps(items):
+    return {"type": "steps", "items": items}
 
 
-def _bars(rows, show_range=True):
-    """Diverging bars around zero; navy if significant, grey if it could be noise."""
-    span = max([0.6] + [max(abs(r["lo"]), abs(r["hi"])) for r in rows]) * 1.08
-
-    def x(v):
-        return 50 + 50 * max(-1, min(1, v / span))
-
-    out = []
-    for r in rows:
-        c = r["coef"]
-        left, right = sorted([x(0), x(c)])
-        colour = NAVY if r["p"] < 0.05 else "#C3CAD2"
-        rng = (f"<div class='rng' style='left:{x(r['lo']):.1f}%; width:{x(r['hi']) - x(r['lo']):.1f}%'></div>"
-               if show_range else "")
-        out.append(f"<div class='tut-bar'><div class='lab'>{r['label']}</div><div class='tut-track'>"
-                   f"<div class='zero'></div><div class='fill' style='left:{left:.1f}%; "
-                   f"width:{max(right - left, 0.6):.1f}%; background:{colour}'></div>{rng}</div>"
-                   f"<div class='val'>{_num(c)}</div></div>")
-    legend = ("Navy: statistically significant. Grey: could be noise. The thin line is the 95% range."
-              if show_range else "Navy: statistically significant. Grey: could be noise.")
-    return f"<div class='tut-bars'>{''.join(out)}</div><div class='tut-legend'>{legend}</div>"
+def _mock(html, cap=None):
+    return {"type": "mock", "html": html, "cap": cap}
 
 
-def _hit_strip(pct):
-    on = round(pct / 5)
-    return "<div class='tut-hit'>" + "".join(
-        f"<span class='{'on' if k < on else ''}'></span>" for k in range(20)) + "</div>"
+def _fld(label, value, hl=False):
+    return f"<div class='fld{' hl' if hl else ''}'><small>{label}</small>{value}</div>"
 
 
-def _rolling_chart(series, marker=None, label="Value exposure"):
-    df = pd.DataFrame(series, columns=["Date", "v", "p"])
-    df["Date"] = pd.to_datetime(df["Date"])
-    df["Evidence"] = df["p"].map(lambda p: "Significant" if p < 0.05 else "Could be noise")
-    base = alt.Chart(df).encode(x=alt.X("Date:T", title=None, axis=alt.Axis(format="%Y", grid=False,
-                                                                           tickCount="year", labelOverlap=True,
-                                                                           labelColor=MUTED, domainColor=LINE,
-                                                                           tickColor=LINE)))
-    line = base.mark_line(color=NAVY, strokeWidth=1.6, opacity=0.5).encode(
-        y=alt.Y("v:Q", title=label, axis=alt.Axis(gridColor="#F0F2F5", labelColor=MUTED, titleColor=MUTED,
-                                                  domain=False, tickCount=5, titleFontWeight="normal")))
-    pts = base.mark_circle(size=22).encode(
-        y="v:Q",
-        color=alt.Color("Evidence:N", scale=alt.Scale(domain=["Significant", "Could be noise"],
-                                                      range=[NAVY, "#C3CAD2"]),
-                        legend=alt.Legend(orient="top", title=None, labelColor=MUTED)),
-        tooltip=[alt.Tooltip("Date:T", format="%b %Y", title="Window ending"),
-                 alt.Tooltip("v:Q", format=".2f", title=label)])
-    zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#C9D0D8").encode(y="y:Q")
-    layers = [zero, line, pts]
-    if marker is not None:
-        m = pd.DataFrame({"Date": [marker[0]], "t": [marker[1]]})
-        layers += [alt.Chart(m).mark_rule(color=RUST, strokeDash=[4, 3]).encode(x="Date:T"),
-                   alt.Chart(m).mark_text(color=RUST, align="left", dx=5, dy=-70, fontSize=11)
-                   .encode(x="Date:T", text="t:N")]
-    return alt.layer(*layers).properties(height=210).configure_view(stroke=None).configure(
-        font="Inter, sans-serif")
+def _seg(options, on, hl=False):
+    return (f"<div class='seg{' hl' if hl else ''}'>"
+            + "".join(f"<span class='{'on' if o == on else ''}'>{o}</span>" for o in options) + "</div>")
 
+
+ICONS = {
+    "fund": "<svg viewBox='0 0 24 24' fill='none' stroke='#1F4E79' stroke-width='1.8'><path d='M4 19V9M10 19V5M16 19v-7M22 19H2'/></svg>",
+    "index": "<svg viewBox='0 0 24 24' fill='none' stroke='#1F4E79' stroke-width='1.8'><path d='M3 17l5-6 4 3 7-9'/><path d='M15 5h4v4'/></svg>",
+    "fall": "<svg viewBox='0 0 24 24' fill='none' stroke='#B54A3C' stroke-width='1.8'><path d='M3 6c3 0 4 10 8 10s5-6 10-6'/></svg>",
+    "mix": "<svg viewBox='0 0 24 24' fill='none' stroke='#1F4E79' stroke-width='1.8'><path d='M3 20c3-9 8-13 18-15'/><circle cx='8' cy='16' r='1.3' fill='#98A1AC' stroke='none'/><circle cx='12' cy='14' r='1.3' fill='#98A1AC' stroke='none'/><circle cx='14' cy='17' r='1.3' fill='#98A1AC' stroke='none'/></svg>",
+}
 
 DRAWDOWN_SVG = """
-<svg class='tut-svg' viewBox='0 0 520 224' xmlns='http://www.w3.org/2000/svg' font-family='Inter, sans-serif'>
-  <line x1='20' y1='50' x2='505' y2='50' stroke='#C9D0D8' stroke-dasharray='4 4'/>
-  <text x='22' y='42' font-size='11' fill='#98A1AC'>previous high</text>
-  <path d='M20 112 C60 92 95 52 130 50 C165 50 190 165 220 165 C250 165 270 140 300 115
-           C340 80 370 55 400 50 C430 45 470 38 505 32' fill='none' stroke='#1F4E79' stroke-width='2.4'/>
-  <circle cx='130' cy='50' r='4.5' fill='#1F4E79'/>
-  <text x='130' y='37' font-size='11' fill='#17212D' text-anchor='middle'>peak</text>
-  <circle cx='400' cy='50' r='4.5' fill='#1F4E79'/>
-  <text x='400' y='37' font-size='11' fill='#17212D' text-anchor='middle'>back to the high</text>
-  <circle cx='220' cy='165' r='4.5' fill='#B54A3C'/>
-  <text x='220' y='183' font-size='11' fill='#B54A3C' text-anchor='middle'>trough</text>
-  <line x1='220' y1='56' x2='220' y2='156' stroke='#B54A3C' stroke-width='1.2'
-        marker-start='url(#dda)' marker-end='url(#dda)'/>
-  <text x='228' y='98' font-size='11' fill='#B54A3C'>depth</text>
-  <text x='228' y='111' font-size='11' fill='#B54A3C'>of the fall</text>
-  <path d='M130 196 v6 h90 v-6 M220 202 h180 v-6' fill='none' stroke='#98A1AC'/>
-  <text x='175' y='217' font-size='10.5' fill='#66707C' text-anchor='middle'>time to bottom</text>
-  <text x='310' y='217' font-size='10.5' fill='#66707C' text-anchor='middle'>time to recover</text>
+<svg viewBox='0 0 520 230' style='width:100%;display:block' font-family='Inter, sans-serif'>
+  <line x1='20' y1='52' x2='505' y2='52' stroke='#C9D0D8' stroke-dasharray='4 4'/>
+  <text x='22' y='44' font-size='11' fill='#98A1AC'>previous high</text>
+  <path class='dr' d='M20 114 C60 94 95 54 130 52 C165 52 190 167 220 167 C250 167 270 142 300 117
+           C340 82 370 57 400 52 C430 47 470 40 505 34' fill='none' stroke='#1F4E79' stroke-width='2.6'/>
+  <g class='fade' style='animation-delay:.5s'>
+    <circle cx='130' cy='52' r='5' fill='#1F4E79'/><text x='130' y='38' font-size='11.5' fill='#17212D' text-anchor='middle'>peak</text></g>
+  <g class='fade' style='animation-delay:.9s'>
+    <circle cx='220' cy='167' r='5' fill='#B54A3C'/><text x='220' y='186' font-size='11.5' fill='#B54A3C' text-anchor='middle'>trough</text>
+    <line x1='220' y1='58' x2='220' y2='158' stroke='#B54A3C' stroke-width='1.3' marker-start='url(#dda)' marker-end='url(#dda)'/>
+    <text x='229' y='100' font-size='11.5' fill='#B54A3C'>depth</text><text x='229' y='114' font-size='11.5' fill='#B54A3C'>of the fall</text></g>
+  <g class='fade' style='animation-delay:1.3s'>
+    <circle cx='400' cy='52' r='5' fill='#1F4E79'/><text x='400' y='38' font-size='11.5' fill='#17212D' text-anchor='middle'>back to the high</text>
+    <path d='M130 200 v6 h90 v-6 M220 206 h180 v-6' fill='none' stroke='#98A1AC'/>
+    <text x='175' y='222' font-size='11' fill='#66707C' text-anchor='middle'>time to bottom</text>
+    <text x='310' y='222' font-size='11' fill='#66707C' text-anchor='middle'>time to recover</text></g>
   <defs><marker id='dda' viewBox='0 0 10 10' refX='5' refY='5' markerWidth='5' markerHeight='5'
     orient='auto-start-reverse'><path d='M0 0 L10 5 L0 10z' fill='#B54A3C'/></marker></defs>
 </svg>"""
 
-FRONTIER_SVG = """
-<svg class='tut-svg' viewBox='0 0 520 220' xmlns='http://www.w3.org/2000/svg' font-family='Inter, sans-serif'>
-  <line x1='40' y1='190' x2='505' y2='190' stroke='#C9D0D8'/><line x1='40' y1='15' x2='40' y2='190' stroke='#C9D0D8'/>
-  <text x='505' y='208' font-size='11' fill='#66707C' text-anchor='end'>risk (volatility) →</text>
-  <text x='14' y='20' font-size='11' fill='#66707C' transform='rotate(-90 14 20)' text-anchor='end'>return →</text>
-  __DOTS__
-  <path d='M120 150 C140 95 200 62 280 48 C340 40 410 36 480 34' fill='none' stroke='#1F4E79' stroke-width='2.4'/>
-  <circle cx='121' cy='148' r='6' fill='#fff' stroke='#1F4E79' stroke-width='2'/>
-  <text x='132' y='166' font-size='11' fill='#17212D'>lowest-risk mix</text>
-  <path d='M262 38 l4 9 10 1 -8 6 3 10 -9 -5 -9 5 3 -10 -8 -6 10 -1z' fill='#E0B15C' stroke='#B07A2A'/>
-  <text x='282' y='34' font-size='11' fill='#17212D'>best mix for the risk</text>
-  <text x='392' y='26' font-size='11' fill='#1F4E79'>the frontier</text>
+
+def _frontier_svg():
+    rnd = random.Random(4)
+    dots = []
+    for k in range(150):
+        x = rnd.uniform(132, 488)
+        top = 150 - 112 * (1 - ((488 - x) / 356) ** 2.2)
+        y = rnd.uniform(top + 8, 184)
+        dots.append(f"<circle cx='{x:.0f}' cy='{y:.0f}' r='2.6' fill='#C3CAD2'/>")
+    return f"""
+<svg viewBox='0 0 520 220' style='width:100%;display:block' font-family='Inter, sans-serif'>
+  <line x1='40' y1='190' x2='505' y2='190' stroke='#C9D0D8'/><line x1='40' y1='14' x2='40' y2='190' stroke='#C9D0D8'/>
+  <text x='505' y='208' font-size='11' fill='#66707C' text-anchor='end'>risk (how bumpy) →</text>
+  <text x='14' y='16' font-size='11' fill='#66707C' transform='rotate(-90 14 16)' text-anchor='end'>return →</text>
+  <g class='fade'>{''.join(dots)}</g>
+  <path class='dr' d='M120 150 C140 95 200 62 280 48 C340 40 410 36 480 34' fill='none' stroke='#1F4E79' stroke-width='2.6'/>
+  <g class='fade' style='animation-delay:1.2s'><circle cx='121' cy='148' r='6' fill='#fff' stroke='#1F4E79' stroke-width='2'/>
+    <text x='132' y='168' font-size='11.5' fill='#17212D'>lowest-risk mix</text></g>
+  <g class='fade' style='animation-delay:1.5s'><path d='M262 37 l4 9 10 1 -8 6 3 10 -9 -5 -9 5 3 -10 -8 -6 10 -1z' fill='#E0B15C' stroke='#B07A2A'/>
+    <text x='282' y='34' font-size='11.5' fill='#17212D'>best mix for the risk</text></g>
+  <text x='405' y='26' font-size='11.5' fill='#1F4E79' class='fade' style='animation-delay:1s'>the frontier</text>
 </svg>"""
 
 
-def _frontier_svg():
-    import random
-    rnd = random.Random(4)
-    dots = []
-    for _ in range(170):
-        x = rnd.uniform(130, 490)
-        top = 150 - 116 * (1 - ((490 - x) / 360) ** 2.2) if x > 120 else 150
-        y = rnd.uniform(top + 6, 185)
-        dots.append(f"<circle cx='{x:.0f}' cy='{y:.0f}' r='2.6' fill='#C3CAD2' opacity='0.8'/>")
-    return FRONTIER_SVG.replace("__DOTS__", "".join(dots))
+def _handle_svg():
+    return """
+<svg viewBox='0 0 520 220' style='width:100%;display:block' font-family='Inter, sans-serif'>
+  <line x1='20' y1='40' x2='505' y2='40' stroke='#C9D0D8' stroke-dasharray='4 4'/>
+  <text x='22' y='32' font-size='11' fill='#98A1AC'>you invest here, at the top</text>
+  <path class='dr' d='M20 40 C70 44 90 70 130 92 C170 112 190 100 220 128 C250 154 280 150 310 170 C330 182 350 176 370 168'
+        fill='none' stroke='#B54A3C' stroke-width='2.6'/>
+  <text x='378' y='172' font-size='22' fill='#98A1AC' class='fade' style='animation-delay:1.3s'>?</text>
+  <g class='fade' style='animation-delay:1.1s'>
+    <rect x='392' y='60' width='112' height='36' rx='18' fill='#B54A3C'/>
+    <text x='448' y='83' font-size='13.5' font-weight='600' fill='#fff' text-anchor='middle'>Sell</text>
+    <rect x='392' y='60' width='112' height='36' rx='18' fill='none' stroke='#B54A3C' stroke-width='2' opacity='.5'>
+      <animate attributeName='opacity' values='.6;0;.6' dur='1.8s' repeatCount='indefinite'/></rect></g>
+  <text x='448' y='118' font-size='11' fill='#66707C' text-anchor='middle' class='fade' style='animation-delay:1.1s'>always there</text>
+</svg>"""
 
 
 # =====================================================================
-# Decks
+# Factor Analysis
 # =====================================================================
 
-MEANINGS = [
-    ("Size", "small companies", "large companies"),
-    ("Value", "cheap (value) stocks", "expensive (growth) stocks"),
-    ("Profitability", "highly profitable firms", "less profitable firms"),
-    ("Investment", "firms that invest conservatively", "firms that expand aggressively"),
-    ("Momentum", "recent winners", "recent losers"),
+FACTORS = [
+    {"name": "Size", "pos": "small companies", "neg": "large companies"},
+    {"name": "Value", "pos": "cheap (value) stocks", "neg": "expensive (growth) stocks"},
+    {"name": "Profitability", "pos": "highly profitable firms", "neg": "less profitable firms"},
+    {"name": "Investment", "pos": "firms that invest conservatively", "neg": "firms that expand aggressively"},
+    {"name": "Momentum", "pos": "recent winners", "neg": "recent losers"},
 ]
-# how a reliable tilt reads in a sentence: "a clear lean <phrase>"
 WORD = {"SMB": ("toward small companies", "toward large companies"),
         "HML": ("toward value stocks", "toward growth stocks"),
         "RMW": ("toward highly profitable firms", "toward less profitable firms"),
@@ -366,6 +239,7 @@ def _strength(c):
 
 def _factor_deck():
     ex = td.fund_example()
+    name = ex["name"]
     flag = ("Live data didn't load just now, so these are illustrative numbers. "
             "Run the analysis to see the real ones." if ex["example"] else None)
     rows = {r["key"]: r for r in ex["factors"]}
@@ -374,286 +248,315 @@ def _factor_deck():
     hml = rows.get("HML")
 
     if sig:
-        read = "; ".join(
-            f"<b>{r['label']} {_num(r['coef'])}</b>, {_strength(r['coef'])} lean "
-            f"{WORD[r['key']][0] if r['coef'] > 0 else WORD[r['key']][1]}" for r in sig[:3])
-        read = f"The reliable tilts: {read}. Everything grey is too uncertain to call."
+        read = "<br>".join(
+            f"<b>{r['label']} {_num(r['coef'])}</b>: {_strength(r['coef'])} lean "
+            f"{WORD[r['key']][0] if r['coef'] > 0 else WORD[r['key']][1]}." for r in sig[:3])
+        read = f"<p>{read}</p><p>Everything grey is too uncertain to call.</p>"
     else:
-        read = "None of the style tilts is reliably different from zero over this period."
+        read = "<p>None of the style tilts is reliably different from zero over this period.</p>"
 
     value_ok = hml is not None and hml["lo"] > 0
-    value_q = {
-        "q": "Is HDFC Flexi Cap's value tilt reliable?",
-        "options": ["Yes, its range stays above zero", "No, its range crosses zero"],
-        "answer": "Yes, its range stays above zero" if value_ok else "No, its range crosses zero",
-        "why": (f"Value is {_num(hml['coef'])} with a 95% range of {_num(hml['lo'])} to {_num(hml['hi'])}. "
-                + ("The whole range is positive, so the value lean is real, which fits the fund's "
-                   "reputation under Prashant Jain." if value_ok else
-                   "The range includes zero, so over this full period we can't say it leans to value."))
-        if hml else "",
-    }
+    value_q = None
+    if hml:
+        value_q = {
+            "q": f"So, is {name.replace(' Fund', '')} really a value fund?",
+            "options": ["Yes: its value range stays above zero", "No: its value range crosses zero"],
+            "answer": "Yes: its value range stays above zero" if value_ok else "No: its value range crosses zero",
+            "why": (f"Value is {_num(hml['coef'])}, with a 95% range of {_num(hml['lo'])} to {_num(hml['hi'])}. "
+                    + ("The whole range is positive, so the reputation holds up in the numbers." if value_ok else
+                       "The range includes zero, so over the full period the numbers can't confirm it.")),
+        }
 
     a, ap = ex["alpha"], ex["alpha_p"]
-    alpha_read = (f"<b>{_pct(a, signed=True)} a year</b>, and statistically meaningful." if ap < 0.05 else
-                  f"<b>{_pct(a, signed=True)} a year</b>, but well within the range of luck "
-                  f"(p = {ap:.2f}). That's normal: most funds' alpha can't be told apart from zero.")
+    alpha_body = (f"<p>Alpha is the return the factors can't explain. For {name} it's "
+                  f"<b>{_pct(a, signed=True)} a year</b>.</p>"
+                  + ("<p>That's statistically meaningful, which is rare.</p>" if ap < 0.05 else
+                     "<p>But its range crosses zero, so it could be luck. That's normal: most funds' "
+                     "alpha can't be told apart from zero.</p>"))
 
     roll = ex["rolling"].get("HML")
+    windows = ex.get("windows", {})
     roll_slides = []
     if roll:
         ex_d, ex_v = roll["exit"] if roll["exit"] else roll["last"]
         last_d, last_v = roll["last"]
         drift = last_v - ex_v
         if roll["exit"] and abs(drift) >= 0.1:
-            story = (f"In the 3 years to <b>{ex_d:%b %Y}</b>, around Prashant Jain's exit, value exposure was "
-                     f"<b>{_num(ex_v)}</b>. In the latest window, to {last_d:%b %Y}, it's <b>{_num(last_v)}</b>. "
-                     + ("The value lean has faded under new management. That's style drift, and a "
-                        "single full-period regression would have averaged it away." if drift < 0 else
-                        "The value lean has grown stronger since."))
+            story = (f"<p>In the 3 years to <b>{ex_d:%b %Y}</b>, around Prashant Jain's exit, value exposure "
+                     f"was <b>{_num(ex_v)}</b>. In the latest window, to {last_d:%b %Y}, it's "
+                     f"<b>{_num(last_v)}</b>.</p>"
+                     + ("<p>The value lean has faded under new management.</p>" if drift < 0 else
+                        "<p>The value lean has grown stronger since.</p>"))
+            take = ("That's <b>style drift</b>. One full-period number would have averaged it away."
+                    if drift < 0 else "One full-period number hides how the style has moved.")
         else:
-            story = (f"Value exposure has moved between {_num(min(v for _, v, _ in roll['series']))} and "
-                     f"{_num(max(v for _, v, _ in roll['series']))} across windows, ending at "
-                     f"<b>{_num(last_v)}</b> in the window to {last_d:%b %Y}.")
+            vals = [v for _, v, _ in roll["series"]]
+            story = (f"<p>Value exposure has moved between {_num(min(vals))} and {_num(max(vals))} across "
+                     f"windows, ending at <b>{_num(last_v)}</b> in the window to {last_d:%b %Y}.</p>")
+            take = "A line that stays put means a steady style. Big swings mean the manager moves around."
+        marker = {"date": td.JAIN_EXIT.strftime("%Y-%m-%d"), "label": "Jain exits"}
         roll_slides = [
             slide("Over time", "One number can hide a change of style",
-                  "The full-period regression gives one average. <b>Over time</b> reruns it on every "
-                  "3-year window, one window ending each month. Each dot below is one window for "
-                  "HDFC Flexi Cap's value exposure. The dashed line marks mid-2022.",
-                  chart=_rolling_chart(roll["series"], (td.JAIN_EXIT, "Jain exits")), flag=flag),
-            slide("Over time", "Reading the line", story,
-                  quiz={"q": "A fund's value line falls from 0.45 to 0.05 over three years, while R² stays high. "
-                             "What most likely happened?",
+                  "<p>The <b>Over time</b> tab reruns the regression on every 3-year window, one ending each "
+                  f"month. Here's {name.replace(' Fund', '')}'s value exposure, window by window.</p>",
+                  viz={"type": "rolling", "windows": {"3Y": windows.get("3Y", roll["series"])},
+                       "default": "3Y", "marker": marker, "label": "Value exposure"},
+                  take="Each dot is one 3-year window. The dashed line marks mid-2022.", flag=flag),
+            slide("Over time", "Reading the line", story, take=take,
+                  viz={"type": "rolling", "windows": {"3Y": windows.get("3Y", roll["series"])},
+                       "default": "3Y", "marker": marker, "label": "Value exposure"},
+                  quiz={"q": "A value line falls from 0.45 to 0.05 while R² stays high. What happened?",
                         "options": ["The manager changed style", "Value stocks crashed", "The fund got bigger"],
                         "answer": "The manager changed style",
-                        "why": "Exposure measures how the fund moves with value stocks, not how value stocks did. "
+                        "why": "Exposure measures how the fund moves with value stocks, not how they did. "
                                "A falling line with a steady R² means the portfolio itself shifted.",
-                        "wrong": {"Value stocks crashed": "A value crash would hurt returns, but exposure "
-                                  "measures how closely the fund tracks value stocks, not how they performed.",
-                                  "The fund got bigger": "Size can change a fund over time, but by itself it "
-                                  "doesn't erase a value lean. A steady R² with a falling value line points "
-                                  "to the portfolio changing style."}}),
+                        "wrong": {"Value stocks crashed": "A crash hurts returns, but exposure measures how "
+                                  "closely the fund tracks value stocks, not how they performed.",
+                                  "The fund got bigger": "Size alone doesn't erase a value lean."}}),
         ]
+        if len(windows) > 1:
+            roll_slides.append(slide(
+                "Over time", "Pick a window that fits the question",
+                "<p>Switch the window on the right. <b>1Y</b> reacts fast but jumps around. <b>5Y</b> is smooth "
+                "but slow to show a change. <b>3Y</b> is the default for a reason.</p>",
+                take="A tilt that stays navy across most windows is part of the fund's DNA.",
+                viz={"type": "rolling", "windows": windows, "default": "1Y", "marker": marker,
+                     "label": "Value exposure",
+                     "notes": {"1Y": "1-year windows: quick to react, lots of noise (more grey dots).",
+                               "3Y": "3-year windows: the balance PRISM uses by default.",
+                               "5Y": "5-year windows: smooth, but a change shows up late."}}))
+
+    table = [{"term": "Alpha (monthly)", "coef": ex["alpha"] / 12, "se": ex.get("alpha_se", 0.1),
+              "t": (ex["alpha"] / 12) / ex.get("alpha_se", 0.1) if ex.get("alpha_se") else 0}]
+    table += [{"term": r["label"], "coef": r["coef"], "se": r["se"], "t": r["coef"] / r["se"] if r["se"] else 0}
+              for r in ex["factors"]]
 
     return [
         slide("The idea", "A fund is a recipe",
-              "Every month, a fund's return can be split into ingredients: how much it moves with the "
-              "market, and how much it leans toward small or large companies, value or growth, profitable "
-              "firms, cautious investors and recent winners. Whatever the recipe can't explain is "
-              "<b>alpha</b>: the manager's own skill, or luck.",
-              html="<div class='tut-eq'><span class='tut-chip'>Fund return</span><i>=</i>"
-                   "<span class='tut-chip lead'>Market</span><i>+</i><span class='tut-chip'>Size</span><i>+</i>"
-                   "<span class='tut-chip'>Value</span><i>+</i><span class='tut-chip'>Profitability</span><i>+</i>"
-                   "<span class='tut-chip'>Investment</span><i>+</i><span class='tut-chip'>Momentum</span><i>+</i>"
-                   "<span class='tut-chip alpha'>Alpha</span></div>",
-              after="Each ingredient gets a number, its <b>exposure</b>. This tour reads them for a real fund."),
-        slide("The idea", f"Meet the test fund: {ex['name']}",
-              "For years it was run by Prashant Jain, known as a value investor, until he left HDFC AMC "
-              "in mid-2022. Do the numbers agree with the reputation? This is the same fund from the "
-              "post launching PRISM on my Substack.",
-              html=_tiles([("Fund", "Flexi cap", ex["plan"].replace(ex["name"], "").strip(" -") or "Direct plan"),
-                           ("Months analysed", f"{ex['months']}", f"{ex['start']:%b %Y} to {ex['end']:%b %Y}"),
-                           ("Model", "6 factors", "Fama-French 5 + Momentum")]), flag=flag),
+              "<p>Every month, a fund's return can be split into ingredients: the market, plus a lean toward "
+              "certain kinds of stocks. Whatever's left over is <b>alpha</b>.</p>",
+              viz={"type": "recipe", "hint": "Hover an ingredient to see what it is.", "chips": [
+                  {"t": "Fund return", "kind": "out", "d": "What the fund returned in a month, above the risk-free rate."},
+                  {"t": "Market", "kind": "lead", "d": "<b>Market:</b> how much it swings with the whole market."},
+                  {"t": "Size", "d": "<b>Size:</b> small companies (+) or large ones (−)."},
+                  {"t": "Value", "d": "<b>Value:</b> cheap stocks (+) or expensive, growth stocks (−)."},
+                  {"t": "Profitability", "d": "<b>Profitability:</b> highly profitable firms (+) or less (−)."},
+                  {"t": "Investment", "d": "<b>Investment:</b> firms that invest conservatively (+) or aggressively (−)."},
+                  {"t": "Momentum", "d": "<b>Momentum:</b> recent winners (+) or recent losers (−)."},
+                  {"t": "Alpha", "kind": "alpha", "d": "<b>Alpha:</b> what the recipe can't explain. Skill, or luck."}]},
+              take="Each ingredient gets a number, its <b>exposure</b>. This tour reads them for a real fund."),
+        slide("The idea", f"Meet the test fund: {name}",
+              "<p>For years it was run by Prashant Jain, known as a value investor, until he left HDFC AMC in "
+              "mid-2022. It's the fund from the post launching PRISM on my Substack.</p>",
+              viz={"type": "tiles", "items": [
+                  {"label": "Months analysed", "value": str(ex["months"]), "num": ex["months"],
+                   "sub": f"{ex['start']:%b %Y} to {ex['end']:%b %Y}"},
+                  {"label": "Factor model", "value": "6", "num": 6, "sub": "Fama-French 5 + Momentum"},
+                  {"label": "Manager change", "value": "2022", "sub": "Prashant Jain leaves"}]},
+              take="The question for this tour: do the numbers back up the value reputation?", flag=flag),
         slide("Exposures", "Step 1: how much do the factors explain?",
-              f"The <b>Explained by factors</b> card shows R². For {ex['name']} it's "
-              f"<b>{ex['r2']:.0f}%</b>: that share of its monthly ups and downs is explained by the factors.",
-              html=_tiles([("Explained by factors", f"{ex['r2']:.0f}%", "R² of the regression")]),
-              after="Rule of thumb: above about 80%, the factors tell most of the story and the rest of the "
-                    "page is trustworthy. Below about 60%, something else is driving the fund, such as "
-                    "sector bets, cash or foreign stocks, so read the tilts with care.", flag=flag),
+              f"<p>Start with the <b>Explained by factors</b> card (R²). For {name}, the factors explain "
+              f"<b>{ex['r2']:.0f}%</b> of its monthly ups and downs.</p>",
+              viz={"type": "gauge", "value": round(ex["r2"])},
+              take="Above about 80%, trust the rest of the page. Below about 60%, something else is driving "
+                   "the fund, so read the tilts with care.", flag=flag),
         slide("Exposures", "Step 2: market beta",
-              f"Beta is the market exposure. {ex['name']}'s is <b>{_num(ex['beta'], signed=False)}</b>: it "
-              f"moves about <b>{ex['beta'] * 100:.0f}%</b> as much as the market. Equity funds usually "
-              "sit between 0.8 and 1.1. Lower means the fund carries cash or calmer stocks.",
-              quiz={"q": "A fund has a beta of 1.2. The market falls 10%. From market exposure alone, "
-                         "roughly how much would you expect it to fall?",
+              f"<p>Beta is how hard the fund swings with the market. {name}'s is "
+              f"<b>{_num(ex['beta'], signed=False)}</b>. Most equity funds sit between 0.8 and 1.1.</p>"
+              "<p>Drag the sliders to feel what it means.</p>",
+              viz={"type": "beta", "beta": ex["beta"], "start": round(ex["beta"], 2),
+                   "fund": name.replace(" Fund", "")},
+              quiz={"q": "Beta 1.2, market falls 10%. Roughly how much does the fund fall?",
                     "options": ["8%", "10%", "12%"], "answer": "12%",
-                    "why": "1.2 × 10% = 12%. A beta above 1 amplifies the market in both directions.",
-                    "wrong": {"8%": "That would be a beta of 0.8. A beta of 1.2 amplifies the market: 1.2 × 10% = 12%.",
-                              "10%": "That's a beta of exactly 1. Here it's 1.2, so 1.2 × 10% = 12%."}},
+                    "why": "1.2 × 10% = 12%. A beta above 1 amplifies the market both ways.",
+                    "wrong": {"8%": "That would be a beta of 0.8.", "10%": "That would be a beta of exactly 1."}},
               flag=flag),
-        slide("Exposures", "Step 3: read each tilt, sign first",
-              "A <b>positive</b> number means the fund leans toward the first group, and a <b>negative</b> "
-              "number means it leans toward the opposite group.",
-              html="<ul class='tut-list'><li class='head'><span>Factor</span><span>Positive (+)</span>"
-                   "<span>Negative (−)</span></li>"
-                   + "".join(f"<li><b>{a}</b><span>{p}</span><span>{n}</span></li>" for a, p, n in MEANINGS)
-                   + "</ul>"),
-        slide("Exposures", "Then read the size",
-              "The size of the number tells you how strong the lean is. As a rough guide on this page: "
-              "under 0.1 is slight, 0.1 to 0.3 is a clear tilt, and above 0.3 is strong. A Momentum "
-              "exposure of <b>+0.8</b> would mean the fund strongly chases recent winners. A Value of "
-              "<b>−0.4</b> would mean a strong lean toward expensive, growth stocks.",
-              quiz={"q": "A fund shows Size −0.35. What does it hold?",
-                    "options": ["Mostly small companies", "Mostly large companies", "A mix, no lean"],
-                    "answer": "Mostly large companies",
-                    "why": "Negative size means the opposite of small: a strong lean toward large companies, "
-                           "typical of a large-cap fund.",
-                    "wrong": {"Mostly small companies": "A positive size number would mean small companies. "
-                              "Negative points the other way: large companies.",
-                              "A mix, no lean": "At −0.35 the lean is strong, toward large companies."}}),
+        slide("Exposures", "Step 3: read a tilt, sign first, then size",
+              "<p>A <b>positive</b> exposure leans toward the first group; a <b>negative</b> one leans the "
+              "other way. The size says how strongly.</p>"
+              "<p>So <b>Momentum +0.8</b> means the fund strongly chases recent winners. Try other factors "
+              "and values.</p>",
+              viz={"type": "tilt", "factors": FACTORS, "start": {"factor": "Momentum", "value": 0.8}},
+              take="Under 0.1 is slight. 0.1 to 0.3 is a clear tilt. Above 0.3 is strong."),
+        slide("Exposures", "Quick check",
+              "<p>A large-cap fund and a small-cap fund will sit on opposite sides of the Size factor.</p>",
+              quizSide=True,
+              quiz={"q": "A fund shows Size −0.35. What does it mostly hold?",
+                    "options": ["Small companies", "Large companies", "A mix, with no lean"],
+                    "answer": "Large companies",
+                    "why": "Negative size points away from small companies: a strong lean to large ones.",
+                    "wrong": {"Small companies": "That would be a positive Size number.",
+                              "A mix, with no lean": "At −0.35 the lean is strong. Check the sign."}}),
         slide("Exposures", "Step 4: is it real, or noise?",
-              "Every exposure is an estimate, so the chart draws a <b>95% range</b> around it. If the range "
-              "crosses zero, the tilt can't be told apart from no tilt at all. Those bars are grey. Navy "
-              "bars are statistically significant. The <b>Confidence</b> column says the same in words: "
-              "strong evidence, some evidence, or could be noise.",
-              html=_bars([{"label": "Momentum", "coef": 0.8, "lo": -0.3, "hi": 1.9, "p": 0.15},
-                          {"label": "Value", "coef": 0.25, "lo": 0.12, "hi": 0.38, "p": 0.001}]),
-              quiz={"q": "Momentum is +0.8, but its range runs from −0.3 to +1.9. What can you conclude?",
-                    "options": ["A strong momentum fund", "Can't tell, it could be zero", "It avoids momentum"],
-                    "answer": "Can't tell, it could be zero",
-                    "why": "A big number with a range that crosses zero is not evidence. The smaller Value "
-                           "tilt above, +0.25 with a tight range, is the more reliable signal."}),
-        slide("Exposures", f"{ex['name']}'s tilts", read,
-              html=_bars(tilts), quiz=value_q if hml else None, flag=flag),
-        slide("Exposures", "Step 5: alpha, what's left over",
-              f"Alpha is the return the factors don't explain. For {ex['name']} it's {alpha_read} "
-              "A large alpha with weak evidence means nothing yet. A small alpha with strong evidence "
-              "is rare and worth noticing.", flag=flag),
+              "<p>Every exposure is an estimate, so each bar gets a <b>95% range</b>. If the range crosses "
+              "zero, the tilt could be nothing at all, and the bar turns grey.</p>",
+              viz={"type": "bars", "hint": "Hover each row to see its range.", "rows": [
+                  {"label": "Momentum", "coef": 0.8, "lo": -0.3, "hi": 1.9, "p": 0.15},
+                  {"label": "Value", "coef": 0.25, "lo": 0.12, "hi": 0.38, "p": 0.001}]},
+              quiz={"q": "Momentum is +0.8 with a range of −0.3 to +1.9. What can you say?",
+                    "options": ["Strong momentum fund", "Can't tell: it could be zero"],
+                    "answer": "Can't tell: it could be zero",
+                    "why": "A big number with a range that crosses zero isn't evidence. The smaller Value tilt, "
+                           "with a tight range, is the real signal."}),
+        slide("Exposures", f"Now the real thing: {name.replace(' Fund', '')}'s tilts", read,
+              viz={"type": "bars", "rows": tilts}, quiz=value_q, flag=flag),
+        slide("Exposures", "Step 5: alpha, what's left over", alpha_body,
+              viz={"type": "alpha", "a": a, "lo": ex.get("alpha_lo", a - 2), "hi": ex.get("alpha_hi", a + 2)},
+              take="A big alpha with weak evidence means nothing yet. A small alpha with strong evidence is "
+                   "worth noticing.", flag=flag),
         *roll_slides,
-        slide("Over time", "Choosing the window",
-              "<b>1Y</b> reacts fast but is noisy. <b>3Y</b> is a good default. <b>5Y</b> is smooth but slow "
-              "to show a change. Darker points are significant, and the shaded band is the 95% range. "
-              "A tilt that stays dark across most windows is part of the fund's DNA. The headline above "
-              "the chart tells you which tilts were significant in most windows."),
         slide("Details", "The raw numbers, if you want them",
-              "<b>Growth of ₹1 lakh</b> shows the fund's path. <b>Full regression</b> lists every "
-              "coefficient with its standard error, t-stat and p-value. A t-stat beyond about ±2, or a "
-              "p-value under 0.05, is what makes a bar navy. Standard errors are Newey-West, which allows "
-              "for monthly returns that aren't fully independent of each other. <b>Monthly returns used</b> "
-              "shows the exact data behind the fit."),
-        slide("Your turn", "How to analyse any fund in five steps",
-              html="<ol class='tut-steps'>"
-                   "<li><b>R²</b>: do the factors explain most of it? Above about 80%, trust the rest.</li>"
-                   "<li><b>Beta</b>: how hard does it swing with the market?</li>"
-                   "<li><b>Tilts</b>: sign for direction, size for strength.</li>"
-                   "<li><b>Confidence</b>: ignore grey bars and ranges that cross zero.</li>"
-                   "<li><b>Over time and alpha</b>: has the style stayed put, and is anything left over real?</li>"
-                   "</ol>",
-              after="Use <b>Portfolio</b> mode to read your whole mix of funds the same way.",
-              cta=f"Analyse {ex['name']}", prefill={"fa_mode": "One fund", "fa_q": "hdfc flexi cap"}),
+              "<p>The <b>Details</b> tab has the growth of ₹1 lakh, the full regression and the monthly data "
+              "behind it.</p><p>Standard errors are Newey-West, which allows for monthly returns that aren't "
+              "fully independent of each other.</p>",
+              viz={"type": "table", "rows": table}, flag=flag),
+        slide("Your turn", "Analyse any fund in five steps",
+              "<p>That's the whole method. It works the same for one fund or, in <b>Portfolio</b> mode, "
+              "your whole mix.</p>",
+              viz=_steps(["<b>R²</b>: do the factors explain most of it?",
+                          "<b>Beta</b>: how hard does it swing with the market?",
+                          "<b>Tilts</b>: sign for direction, size for strength.",
+                          "<b>Confidence</b>: ignore grey bars and ranges crossing zero.",
+                          "<b>Over time and alpha</b>: is the style steady, and is anything left over real?"])),
     ]
 
 
+# =====================================================================
+# FBI Intelligence
+# =====================================================================
+
 def _fbi_deck():
     ex = td.fbi_example()
+    q = td.quilt_example()
     s = [slide("Overview", "Indices with a rule",
-               "Factor and strategy indices pick stocks by a rule. <b>Nifty200 Momentum 30</b>, for example, "
-               "holds the 30 stocks from the Nifty 200 with the strongest recent price trends. This page shows "
-               "how such indices really behaved. The four controls at the top (<b>Index</b>, <b>Compare with</b>, "
-               "<b>Benchmark</b>, <b>Period</b>) drive every tab.")]
+               "<p>Factor indices pick stocks by a rule. <b>Nifty200 Momentum 30</b> holds the 30 Nifty 200 "
+               "stocks with the strongest recent price trends.</p><p>Four controls at the top drive every "
+               "tab on this page.</p>",
+               viz=_mock("<div class='row'>" + _fld("Index", "Nifty200 Momentum 30", True)
+                         + _fld("Compare with", "Nifty500 Value 50") + "</div><div class='row'>"
+                         + _fld("Benchmark", "Nifty 500") + _seg(["1Y", "3Y", "5Y", "10Y", "Max"], "5Y") + "</div>",
+                         "Pick an index, an optional second one to compare, the benchmark, and the period."))]
     if ex:
         yrs = (ex["end"] - ex["start"]).days / 365.25
         grow = {k: (1 + ex["cagr"][k] / 100) ** yrs for k in ("a", "b")}
         s.append(slide("Overview", "Start with the headline",
-                       f"Each tab opens with a sentence computed from the data. Over the full history since "
-                       f"{ex['start']:%b %Y}, {ex['a']} returned <b>{_pct(ex['cagr']['a'])} a year</b> against "
-                       f"{_pct(ex['cagr']['b'])} for the {ex['b']}.",
-                       html=_tiles([(ex["a"], f"₹{grow['a']:.0f} lakh", "from ₹1 lakh"),
-                                    (ex["b"], f"₹{grow['b']:.0f} lakh", "from ₹1 lakh")]),
-                       after="The cards then add volatility and the worst fall. Return is only half the story."))
+                       f"<p>Every tab opens with a sentence worked out from the data. Since {ex['start']:%b %Y}, "
+                       f"{ex['a']} returned <b>{_pct(ex['cagr']['a'])} a year</b> against "
+                       f"{_pct(ex['cagr']['b'])} for the {ex['b']}.</p>",
+                       viz={"type": "growth", "cap": f"₹1 lakh invested in {ex['start']:%b %Y}",
+                            "items": [{"name": ex["a"], "value": round(grow["a"]), "color": "#1F4E79"},
+                                      {"name": ex["b"], "value": round(grow["b"]), "color": "#A9B6C3"}]},
+                       take="The cards add volatility and the worst fall. Return is only half the story."))
         h = ex["hit3"]
         s.append(slide("Returns", "Returns depend on when you start",
-                       "A single return figure depends on its start date. <b>Rolling returns</b> look at every "
-                       "3-year stretch instead and count how often one index won. "
-                       f"{ex['a']} beat the {ex['b']} in <b>{h['pct']:.0f}%</b> of {h['n']} rolling 3-year "
-                       f"periods, by a median of {h['median']:.1f} percentage points a year.",
-                       html=_hit_strip(h["pct"]) + "<div class='tut-legend'>Each square is 5% of the "
-                       "rolling periods. Navy means it beat the benchmark.</div>",
+                       "<p>One return figure depends on its start date. <b>Rolling returns</b> test every "
+                       f"3-year stretch instead. {ex['a']} won <b>{h['pct']:.0f}%</b> of {h['n']} of them, by a "
+                       f"median of {h['median']:.1f} points a year.</p>",
+                       viz={"type": "hit", "pct": h["pct"], "label": f"of rolling 3-year periods beat the {ex['b']}"},
                        quiz={"q": "Which tells you more about consistency?",
-                             "options": ["Return since launch", "Share of rolling periods it won"],
-                             "answer": "Share of rolling periods it won",
-                             "why": "One start-to-end return can be flattered by a lucky start or end date. "
-                                    "Rolling periods test every start date."}))
-        s.append(slide("Returns", "Calendar years",
-                       "Below the rolling chart, the year-by-year bars show the bad years at a glance. Look "
-                       "for how often a winner over the full period still lost badly in a single year."))
+                             "options": ["Return since launch", "Share of rolling periods won"],
+                             "answer": "Share of rolling periods won",
+                             "why": "A single start-to-end return can be flattered by a lucky start or end date."},
+                       take="Below the rolling chart, the calendar-year bars show the bad years at a glance."))
         wa, wb = ex["worst"]["a"], ex["worst"]["b"]
 
-        def ep(w):
-            return (f"{_pct(w['depth'])} from {w['peak']:%b %Y}, back to its peak by {w['recovery']:%b %Y}"
-                    if w["recovery"] is not None else f"{_pct(w['depth'])} from {w['peak']:%b %Y}, not recovered yet")
+        def rec(w):
+            return f"back by {w['recovery']:%b %Y}" if w["recovery"] is not None else "not recovered yet"
         s.append(slide("Risk", "What did the return cost?",
-                       f"<b>{ex['a']}</b>'s worst fall was {ep(wa)}. The <b>{ex['b']}</b>: {ep(wb)}. The higher "
-                       "return didn't come free. The Risk tab shows every fall from a previous high and the "
-                       "worst episode."))
+                       f"<p>{ex['a']}'s worst fall was <b>{_pct(wa['depth'])}</b>, from {wa['peak']:%b %Y}. The "
+                       f"{ex['b']} fell {_pct(wb['depth'])}. The higher return didn't come free.</p>",
+                       viz={"type": "worst", "items": [
+                           {"name": ex["a"], "depth": wa["depth"], "sub": rec(wa)},
+                           {"name": ex["b"], "depth": wb["depth"], "sub": rec(wb)}]},
+                       take="The Risk tab shows every fall from a previous high, and how long each took to recover."))
         s.append(slide("Risk", "Upside and downside capture",
-                       f"In months the {ex['b']} rose, {ex['a']} captured <b>{ex['up']:.0f}%</b> of its gains. In "
-                       f"months it fell, it took <b>{ex['down']:.0f}%</b> of the losses. The ideal is above "
-                       "100% up and below 100% down.",
-                       quiz={"q": "Fund A captures 90% up and 70% down. Fund B captures 110% up and 120% down. "
-                                  "Which protects you better in falls?",
+                       f"<p>In months the {ex['b']} rose, {ex['a']} took <b>{ex['up']:.0f}%</b> of its gains. In "
+                       f"months it fell, it took <b>{ex['down']:.0f}%</b> of the losses.</p>",
+                       viz={"type": "capture", "up": ex["up"], "down": ex["down"], "bench": ex["b"]},
+                       quiz={"q": "Fund A: 90% up, 70% down. Fund B: 110% up, 120% down. Which protects you "
+                                  "better in falls?",
                              "options": ["Fund A", "Fund B"], "answer": "Fund A",
-                             "why": "Fund A takes only 70% of the falls. Fund B falls more than the market."}))
-    s += [
-        slide("Hit ratio", "Does the rule beat where it came from?",
-              "Every strategy index is built from a parent index: Momentum 30 from the Nifty 200, Value 50 "
-              "from the Nifty 500. The <b>Hit ratio</b> tab shows the share of rolling 1, 3, 5 and 7-year "
-              "periods in which each strategy beat its own parent. Click any number to see the periods "
-              "behind it.",
-              after="If a factor premium is real, the hit ratio usually rises as the window gets longer."),
-        slide("Market map", "The whole field at once",
-              "The <b>Risk and return</b> view plots every index in a category: further right is bumpier, "
-              "higher up is better. <b>Year by year</b> is the quilt: each column is a year, ranked best "
-              "to worst.",
-              quiz={"q": "In the quilt, would you expect one factor to top the ranking every year?",
-                    "options": ["Yes, the best one does", "No, leadership rotates"],
-                    "answer": "No, leadership rotates",
-                    "why": "Leadership rotates as cycles change. That's the case for holding more than one "
-                           "factor rather than betting on last year's winner."}),
-        slide("Your turn", "Judge any index in six steps",
-              html="<ol class='tut-steps'><li><b>Return</b> against the benchmark.</li>"
-                   "<li><b>Consistency</b>: the share of rolling periods it won.</li>"
-                   "<li><b>Pain</b>: the worst fall and how long recovery took.</li>"
-                   "<li><b>Capture</b>: how much of the ups and downs it took.</li>"
-                   "<li><b>Hit ratio</b>: does it beat its own parent?</li>"
-                   "<li><b>Market map</b>: where it sits among its peers.</li></ol>"),
-    ]
+                             "why": "Fund A takes only 70% of the market's falls. Fund B falls harder than the market."}))
+        hits = ex.get("hits", {})
+        if hits:
+            s.append(slide("Hit ratio", "Does the rule beat where it came from?",
+                           "<p>Every strategy index has a parent: Momentum 30 comes from the Nifty 200. The "
+                           f"<b>Hit ratio</b> tab shows how often each one beat its parent. Here's {ex['a']}:</p>",
+                           viz={"type": "tiles", "items": [
+                               {"label": f"{y}-year periods", "value": f"{v:.0f}%", "num": v, "post": "%",
+                                "sub": f"beat the {ex['b']}"} for y, v in sorted(hits.items())],
+                                "cap": "Click any number on the page to see the periods behind it."},
+                           take="If a factor premium is real, the hit ratio usually rises as the window gets longer."))
+    if q:
+        s.append(slide("Market map", "Leadership rotates",
+                       "<p><b>Year by year</b> is the quilt: each column is a year, ranked best to worst. "
+                       "These are the five Nifty 500 factor indices, real returns.</p>",
+                       viz={"type": "quilt", **q},
+                       quiz={"q": "Does one factor top the ranking every year?",
+                             "options": ["Yes, the best one does", "No, leadership rotates"],
+                             "answer": "No, leadership rotates",
+                             "why": "Hover each name to follow it. That rotation is the case for holding more than "
+                                    "one factor."},
+                       take="The <b>Risk and return</b> view plots every index in a category: right is bumpier, up is better."))
+    s.append(slide("Your turn", "Judge any index in six steps",
+                   "<p>Run through these for any index before you buy a fund that tracks it.</p>",
+                   viz=_steps(["<b>Return</b> against the benchmark", "<b>Consistency</b>: share of rolling periods won",
+                               "<b>Pain</b>: worst fall and recovery time", "<b>Capture</b>: how much of the ups and downs",
+                               "<b>Hit ratio</b>: does it beat its own parent?", "<b>Market map</b>: where it sits among peers"])))
     return s
 
+
+# =====================================================================
+# Drawdown, Frontier, games, home, writing
+# =====================================================================
 
 def _drawdown_deck():
     ex = td.drawdown_example()
     s = [
         slide("The idea", "What's a drawdown?",
-              "A drawdown is the fall from a previous high. It runs until the investment closes back above "
-              "that high. Three things matter: how <b>deep</b>, how long to the bottom, and how long the way "
-              "back took.", html=DRAWDOWN_SVG),
+              "<p>A drawdown is the fall from a previous high. It lasts until the investment closes back "
+              "above that high.</p><p>Three things matter: how <b>deep</b>, how long to the bottom, and how "
+              "long the way back takes.</p>",
+              viz={"type": "svg", "svg": DRAWDOWN_SVG}),
         slide("The idea", "Falls and recoveries aren't symmetric",
-              quiz={"q": "An investment falls 50%. How much must it rise to get back to where it was?",
-                    "options": ["50%", "75%", "100%"], "answer": "100%",
-                    "why": "₹100 falls to ₹50. Getting back to ₹100 means doubling, a 100% gain. A −20% fall "
-                           "needs +25%, −33% needs +50%, and −75% needs +300%."}),
+              "<p>Guess first, then check it on the next slide.</p>", quizSide=True,
+              quiz={"q": "An investment falls 50%. What gain gets it back to where it was?",
+                    "options": ["+50%", "+75%", "+100%"], "answer": "+100%",
+                    "why": "₹100 falls to ₹50. Getting back to ₹100 means doubling: +100%."}),
+        slide("The idea", "Try it yourself",
+              "<p>Drag the slider. The deeper the fall, the faster the climb back grows.</p>",
+              viz={"type": "fallcalc", "start": 50},
+              take="This is why avoiding the worst falls matters as much as catching the best rallies."),
     ]
     if ex:
         sc, nf = ex["NIFTY SMALLCAP 250"], ex["NIFTY 50"]
 
-        def yrs(a, b):
-            return f"{(b - a).days / 365.25:.1f} years"
-        rec_sc = f"back to its peak by <b>{sc['recovery']:%b %Y}</b>, {yrs(sc['peak'], sc['recovery'])} after it started" \
-            if sc["recovery"] is not None else "not back to its peak yet"
-        rec_nf = f"recovered by {nf['recovery']:%b %Y}, {yrs(nf['peak'], nf['recovery'])} after its peak" \
-            if nf["recovery"] is not None else "not recovered yet"
-        s.append(slide("The idea", "A real one",
-                       f"The <b>{sc['name']}</b> fell <b>{_pct(sc['depth'])}</b> from {sc['peak']:%b %Y} to "
-                       f"{sc['trough']:%b %Y}, and got {rec_sc}. The {nf['name']} fell {_pct(nf['depth'])} and "
-                       f"{rec_nf}. Smaller companies brought a deeper and longer fall.",
-                       html=_tiles([(sc["name"], _pct(sc["depth"]), "worst fall"),
-                                    (nf["name"], _pct(nf["depth"]), "worst fall")])))
+        def sub(w):
+            if w["recovery"] is None:
+                return "not recovered yet"
+            return f"{(w['recovery'] - w['peak']).days / 365.25:.1f} years to recover"
+        s.append(slide("The idea", "A real one: 2008",
+                       f"<p>The <b>{sc['name']}</b> fell {_pct(sc['depth'])} from {sc['peak']:%b %Y}. The "
+                       f"{nf['name']} fell {_pct(nf['depth'])}. Smaller companies brought a deeper, longer fall.</p>",
+                       viz={"type": "worst", "items": [{"name": sc["name"], "depth": sc["depth"], "sub": sub(sc)},
+                                                       {"name": nf["name"], "depth": nf["depth"], "sub": sub(nf)}]}))
     s += [
-        slide("Reading the page", "Pick what to compare",
-              "Add up to ten indices or mutual funds. <b>Period</b> sets how far back to look. With "
-              "<b>Start dates</b> set to <b>Same for all</b>, everything is compared over the same years. "
-              "<b>Each from its own start</b> shows each one's full history."),
-        slide("Reading the page", "The chart and the table",
-              "The line sits at <b>0%</b> whenever it's at a new high. The further it dips, the deeper the fall. "
-              "Width matters as much as depth: a long, shallow dip can test patience more than a sharp one. "
-              "The table at the bottom lists the worst falls, with dates and how long each recovery took."),
+        slide("Reading the page", "Pick, compare, read",
+              "<p>Add up to ten indices or mutual funds. <b>Period</b> sets how far back to look. <b>Start "
+              "dates</b> compares everything over the same years, or each from its own start.</p>"
+              "<p>On the chart, the line sits at <b>0%</b> at every new high. The table lists the worst falls.</p>",
+              viz=_mock("<div class='row'>" + _seg(["Index", "Mutual fund"], "Index")
+                        + _fld("Add", "Nifty Midcap 150") + "</div><div class='row'>"
+                        + "<span class='pill'>Nifty 50 ×</span><span class='pill'>Nifty Smallcap 250 ×</span></div>"
+                        + "<div class='row'>" + _seg(["1Y", "3Y", "5Y", "10Y", "Max"], "Max", True)
+                        + _seg(["Same for all", "Each from its own start"], "Same for all", True) + "</div>",
+                        "The two highlighted controls change what's compared, so check them first."),
+              take="Width matters as much as depth: a long, shallow dip tests patience more than a sharp one."),
         slide("Your turn", "Before you invest, ask",
-              html="<ol class='tut-steps'><li>How <b>deep</b> was the worst fall?</li>"
-                   "<li>How long did it take to <b>recover</b>?</li>"
-                   "<li>Is it in a fall <b>right now</b>?</li>"
-                   "<li>Could you have <b>sat through it</b> without selling?</li></ol>",
-              after="For the last question, try the game <b>Can You Handle It?</b>"),
+              "<p>Run these four questions on anything you're about to buy.</p>",
+              viz=_steps(["How <b>deep</b> was the worst fall?", "How long did it take to <b>recover</b>?",
+                          "Is it in a fall <b>right now</b>?", "Could you have <b>sat through it</b> without selling?"]),
+              take="For the last question, play <b>Can You Handle It?</b>"),
     ]
     return s
 
@@ -662,105 +565,127 @@ def _frontier_deck():
     ex = td.frontier_example()
     s = [
         slide("The idea", "Every dot is a mix",
-              "Combine a few indices in different weights and each mix has a risk (how bumpy it was) and a "
-              "return. The <b>frontier</b> is the top edge: for each level of risk, the most return any mix "
-              "achieved. The gold star is the best mix for the risk, the highest return above cash per unit "
-              "of risk (the Sharpe ratio).", html=_frontier_svg()),
+              "<p>Mix a few indices in different weights, and each mix has a risk and a return.</p><p>The "
+              "<b>frontier</b> is the top edge: the most return any mix got for each level of risk. The "
+              "gold star is the best return per unit of risk (the Sharpe ratio).</p>",
+              viz={"type": "svg", "svg": _frontier_svg()}),
         slide("Reading the page", "The controls",
-              "<b>Look-back</b> is the stretch of history the frontier is built from. <b>Then test on the "
-              "next</b> is how many years afterwards to check the mix. <b>Max in one index</b> stops it from "
-              "piling everything into one index, and <b>Min in each index</b> keeps every index in. Use the "
-              "arrows to slide the window through time."),
+              "<p><b>Look-back</b> is the history the frontier is built from. <b>Then test on the next</b> "
+              "checks the mix on the years after. The caps stop it putting everything in one index.</p>",
+              viz=_mock("<div class='row'>" + _seg(["Nifty 500 factors", "Custom set"], "Nifty 500 factors") + "</div>"
+                        + "<div class='row'>" + _seg(["3Y", "5Y", "10Y", "All"], "5Y", True)
+                        + _seg(["1Y", "3Y", "5Y"], "5Y", True) + "</div><div class='row'>"
+                        + _seg(["No cap", "50%", "40%", "30%"], "No cap") + _seg(["None", "5%", "10%"], "None")
+                        + "</div><div class='row'><span class='pill'>‹</span><span style='color:#66707C'>"
+                        "slide the window through time</span><span class='pill'>›</span></div>",
+                        "Highlighted: the look-back and the test period."),
+              take="Without a cap, the best mix is often just one index."),
     ]
     if ex:
         b = ex["beat_equal"]
         bucket = "About 25%" if b < 37.5 else "About 50%" if b < 70 else "About 90%"
         s.append(slide("Did it last?", "The catch: hindsight",
-                       "A frontier is drawn with perfect hindsight. The real question is whether the best past "
-                       "mix kept working. The page tests it on the years that followed. "
-                       f"We ran every 5-year window from the six Nifty 500 factor indices, "
-                       f"{ex['n']} of them, each tested on the next 5 years.",
-                       quiz={"q": "Guess: how often did the 'best' past mix beat a simple equal-weight mix "
-                                  "of the same indices over the next five years?",
+                       "<p>A frontier is drawn with perfect hindsight. Did the best past mix keep working? We "
+                       f"ran {ex['n']} five-year windows of the Nifty 500 factor indices, each tested on the next "
+                       "five years.</p>", quizSide=True,
+                       quiz={"q": "How often did the 'best' past mix beat a simple equal mix of the same indices?",
                              "options": ["About 25%", "About 50%", "About 90%"], "answer": bucket,
-                             "why": f"<b>{b:.0f}%</b> of the time, close to a coin flip, even though it beat the "
-                                    f"Nifty 500 itself {ex['beat_bench']:.0f}% of the time. The edge came "
-                                    "from holding the factors at all, not from the optimised weights."}))
+                             "why": f"<b>{b:.0f}%</b> of the time: close to a coin flip."}))
+        s.append(slide("Did it last?", "What actually worked",
+                       "<p>The optimised mix beat the Nifty 500 almost every time. But it barely beat simply "
+                       "holding the same indices equally.</p>",
+                       viz={"type": "tiles", "items": [
+                           {"label": "Best past mix beat the Nifty 500", "value": f"{ex['beat_bench']:.0f}%",
+                            "num": ex["beat_bench"], "post": "%", "sub": "over the next 5 years"},
+                           {"label": "Best past mix beat the equal mix", "value": f"{b:.0f}%", "num": b,
+                            "post": "%", "sub": "over the next 5 years"}]},
+                       take="The edge came from holding the factors at all, not from the optimised weights."))
     s.append(slide("Your turn", "Use it as a lens, not a recipe",
-                   "Slide the window and watch the weights jump from one period to the next. That instability "
-                   "is the lesson. Look for indices that keep showing up in the best mix across many windows, "
-                   "and compare the result with the equal mix before trusting any weights."))
+                   "<p>Slide the window and watch the weights jump. That instability is the lesson.</p>",
+                   viz=_steps(["Slide the look-back window through time", "Watch which indices keep showing up",
+                               "Compare the best mix with the equal mix", "Only then trust any weights"])))
     return s
 
 
 def _try_to_time_deck():
+    cards = "".join(
+        f"<div class='fld' style='flex:1 1 30%'><small>{n}</small>Last year · 3Y · 5Y · Risk</div>"
+        for n in ["Momentum", "Value", "Quality", "Low Volatility", "Growth"])
     return [
         slide("How to play", "Back one index a year",
-              "Five Nifty 500 factor indices race through each calendar year: Momentum, Value, Quality, Low "
-              "Volatility and Growth. Before each year you pick one, using only what was known at the end of "
-              "the year before."),
-        slide("How to play", "Reading the cards",
-              "Each index shows its returns over the last 1, 3 and 5 years, its <b>risk</b> (how bumpy its "
-              "monthly returns were) and its <b>worst fall</b>. Some cards also show how often each index has "
-              "won. Use them however you like. That's the whole question."),
-        slide("How to play", "Points, money and a rival",
-              "You score 100 points for picking the year's winner, 50 for second and 20 for third, plus a "
-              "streak bonus. ₹1 lakh moves into your pick each year. A <b>mystery rival</b> plays alongside "
-              "you, and you'll find out who it was at the end.", cta="Let's play"),
+              "<p>Five Nifty 500 factor indices race through each calendar year. Before each year, pick the "
+              "one you think will win, using only what was known at the end of the year before.</p>",
+              viz=_mock(f"<div class='row'>{cards}</div>", "Each card shows returns, risk and the worst fall so far.")),
+        slide("How to play", "How you score",
+              "<p>Points for picking well, plus a bonus for back-to-back winners. ₹1 lakh moves into your "
+              "pick each year.</p>",
+              viz={"type": "tiles", "items": [{"label": "Year's winner", "value": "100", "num": 100, "sub": "points"},
+                                              {"label": "Second", "value": "50", "num": 50, "sub": "points"},
+                                              {"label": "Third", "value": "20", "num": 20, "sub": "points"}]}),
+        slide("How to play", "Beat the mystery rival",
+              "<p>A rival plays alongside you. You'll find out who it was at the end.</p>",
+              viz={"type": "tiles", "items": [{"label": "Your rival", "value": "?", "sub": "revealed at the end"}]}),
     ]
 
 
 def _handle_it_deck():
     return [
-        slide("How to play", "Pick something to invest in",
-              "Choose a Nifty index or search for any mutual fund. The game finds a real high point in its "
-              "history and invests you there."),
-        slide("How to play", "Live through it, month by month",
-              "Time moves forward one month at a time. Watch your money, and notice how it feels. The "
-              "<b>Sell</b> button is always there. Press it and your money is locked in, and the game "
-              "carries on to show you what happened next."),
-        slide("How to play", "What it's really testing",
-              "Knowing an index fell in the past is easy. Staying invested while it's falling is the hard "
-              "part. Play it a few times with different picks.", cta="Let's play"),
-    ]
-
-
-def _writing_deck():
-    return [
-        slide("Writing", "Articles from my Substack",
-              "Essays on factor investing and markets: the thinking behind PRISM's tools. Open any article "
-              "to read it right here, or on my Substack."),
-        slide("Writing", "Read, then try it",
-              "Most articles use a tool on this site. Read the idea, then open the tool and test it on a "
-              "fund or index you care about. Subscribe on my Substack to get new pieces by email."),
+        slide("How to play", "Invest at the top",
+              "<p>Choose a Nifty index or any mutual fund. The game finds a real high point in its history "
+              "and invests you there. Then time moves forward, month by month.</p>",
+              viz={"type": "svg", "svg": _handle_svg()}),
+        slide("How to play", "The Sell button is always there",
+              "<p>Press it and your money is locked in. The game carries on to show you what happened next.</p>",
+              viz={"type": "tiles", "items": [
+                  {"label": "If you hold on", "value": "Stay", "sub": "you ride whatever comes next"},
+                  {"label": "If you press Sell", "value": "Sell", "sub": "the fall becomes permanent"}],
+                   "cap": "You only find out which was right after you choose."},
+              take="Knowing an index fell in the past is easy. Staying in while it falls is the hard part."),
     ]
 
 
 def _home_deck():
     return [
         slide("Start here", "What PRISM does",
-              "PRISM looks through Indian funds, indices and portfolios to show what really drives them. "
-              "Each tool answers one question.",
-              html="<ul class='tut-list'><li class='head'><span>Tool</span><span>Question</span><span>Start with</span></li>"
-                   "<li><b>Factor Analysis</b><span>What drives this fund?</span><span>Any fund you own</span></li>"
-                   "<li><b>FBI Intelligence</b><span>How has this index behaved?</span><span>Momentum vs Value</span></li>"
-                   "<li><b>Drawdown Analysis</b><span>How bad did it get?</span><span>Smallcap vs Nifty 50</span></li>"
-                   "<li><b>Efficient Frontier</b><span>Which mix was best, and did it last?</span><span>The default set</span></li>"
-                   "</ul>"),
+              "<p>PRISM looks through Indian funds, indices and portfolios to show what really drives them. "
+              "Each tool answers one question.</p>",
+              viz={"type": "tools", "items": [
+                  {"name": "Factor Analysis", "q": "What drives this fund?", "icon": ICONS["fund"]},
+                  {"name": "FBI Intelligence", "q": "How has this index behaved?", "icon": ICONS["index"]},
+                  {"name": "Drawdown Analysis", "q": "How bad did it get?", "icon": ICONS["fall"]},
+                  {"name": "Efficient Frontier", "q": "Which mix was best, and did it last?", "icon": ICONS["mix"]}]}),
         slide("Start here", "Every page has a tour",
-              "Look for <b>Take the 1-minute tour</b> under each page title, and <b>How to read this tab</b> "
-              "inside the tabs. The games teach the same ideas by playing.", cta="Start exploring"),
+              "<p>Look for the <b>1-minute tour</b> under each page title, and <b>How to read this tab</b> "
+              "inside the tabs. The games teach the same ideas by playing.</p>",
+              viz=_mock("<div class='row'><span class='fld hl' style='flex:none'>🎓 1-minute tour</span></div>"
+                        "<div class='row'><span class='fld' style='flex:none'>ⓘ How to read this tab</span></div>",
+                        "Use ← → to move through any tour."),
+              take="New to factors? Start with <b>Factor Analysis</b>."),
     ]
 
 
-# page -> deck: the dialog title and the function that builds its slides
+def _writing_deck():
+    return [
+        slide("Writing", "Articles from my Substack",
+              "<p>Essays on factor investing and markets: the thinking behind PRISM's tools. Open any article "
+              "to read it here, or on my Substack.</p>"),
+        slide("Writing", "Read, then try it",
+              "<p>Most articles use a tool on this site. Read the idea, then open the tool and test it on a "
+              "fund or index you care about.</p>",
+              take="Subscribe on my Substack to get new pieces by email."),
+    ]
+
+
+# page -> deck: dialog title, slide builder, last-button label, optional prefill
 DECKS = {
-    "home": {"title": "Welcome to PRISM", "build": _home_deck},
-    "factor-analysis": {"title": "How to read a fund", "build": _factor_deck},
-    "fbi-intelligence": {"title": "How to read an index", "build": _fbi_deck},
-    "drawdown-analysis": {"title": "How to read a fall", "build": _drawdown_deck},
-    "efficient-frontier": {"title": "How to read the frontier", "build": _frontier_deck},
-    "try-to-time": {"title": "Try to Time", "build": _try_to_time_deck},
-    "can-you-handle-it": {"title": "Can You Handle It?", "build": _handle_it_deck},
-    "writing": {"title": "Writing", "build": _writing_deck},
+    "home": {"title": "Welcome to PRISM", "build": _home_deck, "cta": "Start exploring"},
+    "factor-analysis": {"title": "How to read a fund", "build": _factor_deck,
+                        "cta": "Analyse HDFC Flexi Cap",
+                        "prefill": {"fa_mode": "One fund", "fa_q": "hdfc flexi cap"}},
+    "fbi-intelligence": {"title": "How to read an index", "build": _fbi_deck, "cta": "Explore indices"},
+    "drawdown-analysis": {"title": "How to read a fall", "build": _drawdown_deck, "cta": "Compare falls"},
+    "efficient-frontier": {"title": "How to read the frontier", "build": _frontier_deck, "cta": "Build a frontier"},
+    "try-to-time": {"title": "Try to Time", "build": _try_to_time_deck, "cta": "Let's play"},
+    "can-you-handle-it": {"title": "Can You Handle It?", "build": _handle_it_deck, "cta": "Let's play"},
+    "writing": {"title": "Writing", "build": _writing_deck, "cta": "Start reading"},
 }

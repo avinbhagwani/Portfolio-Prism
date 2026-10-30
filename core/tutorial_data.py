@@ -57,23 +57,26 @@ def _fund_example():
     rows = []
     for f in factors:
         c, se = float(m.params[f]), float(m.bse[f])
-        rows.append({"key": f, "label": FACTOR_LABELS[f], "coef": c,
+        rows.append({"key": f, "label": FACTOR_LABELS[f], "coef": c, "se": se,
                      "lo": c - 1.96 * se, "hi": c + 1.96 * se, "p": float(m.pvalues[f])})
 
-    roll = rolling(res["data"], tuple(factors), 36)
-    path = {}
-    if roll is not None and not roll.empty:
-        for f in ("HML", "WML"):
-            s = roll[f].dropna()
+    path, windows = {}, {}
+    for label, months in (("1Y", 12), ("3Y", 36), ("5Y", 60)):
+        roll = rolling(res["data"], tuple(factors), months)
+        if roll is None or roll.empty:
+            continue
+        s = roll["HML"].dropna()
+        windows[label] = [(d.strftime("%Y-%m-%d"), float(v), float(roll.loc[d, "HML_P"])) for d, v in s.items()]
+        if label == "3Y":
             at_exit = s.loc[:JAIN_EXIT]
-            path[f] = {
-                "series": [(d.strftime("%Y-%m-%d"), float(v), float(roll.loc[d, f"{f}_P"]))
-                           for d, v in s.items()],
+            path["HML"] = {
+                "series": windows[label],
                 "first": (s.index[0], float(s.iloc[0])),
                 "exit": (at_exit.index[-1], float(at_exit.iloc[-1])) if not at_exit.empty else None,
                 "last": (s.index[-1], float(s.iloc[-1])),
                 "peak": (s.idxmax(), float(s.max())),
             }
+    a, a_se = float(m.params["const"]), float(m.bse["const"])
 
     return {
         "example": False,
@@ -83,9 +86,12 @@ def _fund_example():
         "months": len(res["data"]),
         "r2": float(m.rsquared) * 100,
         "beta": float(m.params["MKT_RF"]),
-        "alpha": float(m.params["const"]) * 12, "alpha_p": float(m.pvalues["const"]),
+        "alpha": a * 12, "alpha_p": float(m.pvalues["const"]),
+        "alpha_lo": (a - 1.96 * a_se) * 12, "alpha_hi": (a + 1.96 * a_se) * 12,
+        "alpha_se": a_se,
         "factors": rows,
         "rolling": path,
+        "windows": windows,
     }
 
 
@@ -93,7 +99,8 @@ def _fund_fallback():
     """Shown only if the live data can't be loaded. Illustrative numbers,
     flagged as such on every slide that uses them."""
     def row(k, c, half, p):
-        return {"key": k, "label": FACTOR_LABELS[k], "coef": c, "lo": c - half, "hi": c + half, "p": p}
+        return {"key": k, "label": FACTOR_LABELS[k], "coef": c, "se": half / 1.96,
+                "lo": c - half, "hi": c + half, "p": p}
     s = pd.date_range("2016-01-31", "2026-08-31", freq="ME")
     hml = [0.45 - 0.35 * max(0, (d - JAIN_EXIT).days) / 1500 for d in s]
     return {
@@ -101,6 +108,7 @@ def _fund_fallback():
         "name": "HDFC Flexi Cap Fund", "plan": "HDFC Flexi Cap Fund (illustrative numbers)",
         "start": pd.Timestamp("2013-01-31"), "end": pd.Timestamp("2026-08-31"), "months": 163,
         "r2": 90.0, "beta": 0.92, "alpha": 1.1, "alpha_p": 0.40,
+        "alpha_lo": -1.5, "alpha_hi": 3.7, "alpha_se": 0.11,
         "factors": [row("MKT_RF", 0.92, 0.06, 0.0001), row("SMB", -0.05, 0.10, 0.40),
                     row("HML", 0.32, 0.12, 0.0001), row("RMW", 0.02, 0.15, 0.80),
                     row("CMA", 0.06, 0.15, 0.45), row("WML", -0.14, 0.09, 0.004)],
@@ -108,6 +116,7 @@ def _fund_fallback():
             "series": [(d.strftime("%Y-%m-%d"), v, 0.01 if v > 0.2 else 0.3) for d, v in zip(s, hml)],
             "first": (s[0], hml[0]), "exit": (JAIN_EXIT, 0.45), "last": (s[-1], hml[-1]),
             "peak": (s[0], hml[0])}},
+        "windows": {"3Y": [(d.strftime("%Y-%m-%d"), v, 0.01 if v > 0.2 else 0.3) for d, v in zip(s, hml)]},
     }
 
 
@@ -129,13 +138,18 @@ def _fbi_example():
     levels = fm.levels_to_as_of([a, b])
     window, start, _ = fm.common_window(levels, None)
     hit = fm.hit_rate(fm.rolling_cagr(window, 3), a, b)
+    hits = {}
+    for yrs in (1, 3, 5, 7):
+        h = fm.hit_rate(fm.rolling_cagr(window, yrs), a, b)
+        if h:
+            hits[yrs] = float(h["pct"])
     up, down, *_ = fm.capture(window, a, b)
     ep = {n: fm.worst_episode(window[n]) for n in (a, b)}
     return {
         "a": fm.pretty_name(a), "b": fm.pretty_name(b), "start": start, "end": window.index.max(),
         "cagr": {"a": fm.cagr(window[a]), "b": fm.cagr(window[b])},
         "worst": {"a": ep[a], "b": ep[b]},
-        "hit3": hit, "up": up, "down": down,
+        "hit3": hit, "hits": hits, "up": up, "down": down,
     }
 
 
@@ -161,6 +175,26 @@ def _frontier_example():
         "beat_equal": float((t["best"] > t["equal"]).mean() * 100),
         "first": t.index.min(), "last": t.index.max(),
     }
+
+
+@st.cache_data(show_spinner=False)
+def _quilt_example(years=8):
+    """Real calendar-year ranking of the five Nifty 500 factor indices."""
+    from core import fbi_metrics as fm
+    names = ["NIFTY500 MOMENTUM 50", "NIFTY500 VALUE 50", "NIFTY500 QUALITY 50",
+             "NIFTY500 LOW VOLATILITY 50", "NIFTY500 GROWTH 50"]
+    rets, partial = fm.calendar_returns(fm.levels_to_as_of(names))
+    rets = rets.loc[[y for y in rets.index if y != partial]].dropna().tail(years)
+    short = {n: fm.pretty_name(n).replace("Nifty500 ", "").replace(" 50", "") for n in names}
+    cols = []
+    for y, row in rets.iterrows():
+        ranked = row.sort_values(ascending=False)
+        cols.append({"year": int(y), "ranked": [{"name": short[n], "ret": float(v)} for n, v in ranked.items()]})
+    return {"names": [short[n] for n in names], "years": cols}
+
+
+def quilt_example():
+    return _safe(_quilt_example)
 
 
 def _safe(fn):
