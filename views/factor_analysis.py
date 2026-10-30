@@ -76,17 +76,7 @@ def _short(name):
     return name.split(" - ")[0].strip() if name else name
 
 
-def _seed_from_link():
-    """Home's example-fund chips link here with ?fund=<search>; fill the
-    search box once per link so the visitor lands one click from a result."""
-    term = st.query_params.get("fund")
-    if term and st.session_state.get("_fa_seeded") != term:
-        st.session_state["fa_q"] = term
-        st.session_state["_fa_seeded"] = term
-
-
 def render():
-    _seed_from_link()
     st.markdown(FBI_CSS + CSS, unsafe_allow_html=True)
     st.markdown(
         "<div class='fbi-eyebrow'>Factor Analysis</div>"
