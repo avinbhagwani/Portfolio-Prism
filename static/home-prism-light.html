@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PRISM prism (light)</title>
+<!-- Generated from the PRISM redesign canvas. The hero's glass prism, star chart and orbit. -->
+<style>html,body{margin:0;background:transparent;overflow:hidden}#stage{width:100%;max-width:560px;margin:0 auto}</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+class DCLogic { constructor(p){ this.props=p||{}; this.state={}; } setState(o){ Object.assign(this.state,o); } }
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { t: 0, yaw: 0, tilt: 0.34, ty: 0, tt: 0.34 };
+    let seed = 11;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const dot = (x, y) => 'M' + x.toFixed(1) + ',' + y.toFixed(1) + 'h0.01';
+    const cx = 280, cy = 250;
+    let small = '', mid = '', bright = '', dust = '';
+    for (let i = 0; i < 220; i++) small += dot(cx - 320 + rnd() * 640, cy - 320 + rnd() * 640);
+    for (let i = 0; i < 50; i++) mid += dot(cx - 320 + rnd() * 640, cy - 320 + rnd() * 640);
+    for (let i = 0; i < 10; i++) bright += dot(cx - 280 + rnd() * 560, cy - 280 + rnd() * 560);
+    const ang = -24 * Math.PI / 180;
+    for (let i = 0; i < 380; i++) {
+      const u = (rnd() - 0.5) * 660, g = (rnd() + rnd() + rnd() - 1.5) * 36;
+      dust += dot(cx + u * Math.cos(ang) - g * Math.sin(ang), cy + 120 + u * Math.sin(ang) + g * Math.cos(ang));
+    }
+    this.sky = { small, mid, bright, dust };
+    const groups = ['W', 'W', 'W', 'B', 'B', 'T', 'G'];
+    this.rays = [];
+    for (let i = 0; i < 150; i++) {
+      const th = (i / 150) * Math.PI * 2 + (rnd() - 0.5) * 0.05;
+      const long = rnd() < 0.12;
+      this.rays.push({ th, len: long ? 90 + rnd() * 70 : 24 + rnd() * 60, ph: rnd() * 6.28, sp: 1.6 + rnd() * 2.4, g: long ? 'L' : groups[Math.floor(rnd() * groups.length)] });
+    }
+    this.parts = [];
+    for (let i = 0; i < 140; i++) {
+      this.parts.push({ phi: rnd() * Math.PI * 2, rad: 178 + (rnd() - 0.5) * 12, y: (rnd() - 0.5) * 6, big: rnd() < 0.22, gold: rnd() < 0.06 });
+    }
+  }
+  componentDidMount() {
+    let reduce = false;
+    try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    if (reduce) return;
+    this.timer = setInterval(() => {
+      const s = this.state;
+      this.setState({
+        t: s.t + 0.033,
+        yaw: s.yaw + (s.ty - s.yaw) * 0.08,
+        tilt: s.tilt + (s.tt - s.tilt) * 0.08
+      });
+    }, 33);
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  lit(t, x, y) {
+    const chart = t * 2.2 * Math.PI / 180, sweep = (t * 50) * Math.PI / 180;
+    const th = Math.atan2(y - 260, x - 280) + chart;
+    const d = Math.cos(sweep - th);
+    return (0.5 + 0.5 * Math.pow(Math.max(0, d), 14)).toFixed(3);
+  }
+  renderVals() {
+    const { t, yaw, tilt } = this.state;
+    const cx = 280, cy = 290, f = 760, D = 620;
+    const nrm = (v) => { const m = Math.hypot(v[0], v[1], v[2]); return [v[0] / m, v[1] / m, v[2] / m]; };
+    const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+    const cross = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+    const dt = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+    const hex = (v) => '#' + v.map((x) => Math.round(x).toString(16).padStart(2, '0')).join('');
+    const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    const lerp = (c1, c2, k) => c1.map((v, i) => v + (c2[i] - v) * k);
+    const P = (p) => { const s = f / (D + p[2]); return [cx + p[0] * s, cy + p[1] * s]; };
+    const fmt = (q) => q[0].toFixed(1) + ',' + q[1].toFixed(1);
+
+    // --- the triangle slab: sways and tilts, never spins ---
+    const yawA = 0.55 * Math.sin(t * 0.9) + yaw;
+    const pitchA = 0.16 * Math.sin(t * 0.63 + 1) + (tilt - 0.34);
+    const rollA = 0.05 * Math.sin(t * 0.5);
+    const rot = (p) => {
+      let x = p[0], y = p[1], z = p[2];
+      const x1 = x * Math.cos(yawA) + z * Math.sin(yawA), z1 = -x * Math.sin(yawA) + z * Math.cos(yawA);
+      const y2 = y * Math.cos(pitchA) - z1 * Math.sin(pitchA), z2 = y * Math.sin(pitchA) + z1 * Math.cos(pitchA);
+      return [x1 * Math.cos(rollA) - y2 * Math.sin(rollA), x1 * Math.sin(rollA) + y2 * Math.cos(rollA), z2];
+    };
+    const tri = [[0, -150], [130, 75], [-130, 75]];
+    const dep = 44;
+    const F = tri.map((v) => rot([v[0], v[1], -dep / 2]));
+    const Bk = tri.map((v) => rot([v[0], v[1], dep / 2]));
+    const L = nrm([-0.45, -0.7, -0.55]);
+    const sides = [0, 1, 2].map((k) => {
+      const j = (k + 1) % 3;
+      const fc = [F[k], F[j], Bk[j], Bk[k]];
+      const ctr = fc.reduce((acc, p) => [acc[0] + p[0] / 4, acc[1] + p[1] / 4, acc[2] + p[2] / 4], [0, 0, 0]);
+      let n = nrm(cross(sub(fc[1], fc[0]), sub(fc[2], fc[0])));
+      if (dt(n, ctr) < 0) n = [-n[0], -n[1], -n[2]];
+      const vis = dt(n, nrm(sub([0, 0, -D], ctr))) > 0;
+      const b = Math.max(0, dt(n, L));
+      const c = lerp(rgb('#7E9DBD'), rgb('#F4F8FC'), b);
+      return { pts: fc.map((p) => fmt(P(p))).join(' '), fill: hex(c), op: vis ? (0.55 + 0.3 * b).toFixed(3) : 0, line: vis ? 0.55 : 0 };
+    });
+    const apex = P(F[0]);
+    const baseMid = P([(F[1][0] + F[2][0]) / 2, (F[1][1] + F[2][1]) / 2, (F[1][2] + F[2][2]) / 2]);
+
+    // --- ring of light particles ---
+    const ra = t * 0.7, rt = 1.22, rz = -0.22;
+    let backS = '', backB = '', frontS = '', frontB = '', frontG = '';
+    const ringPt = (ph, rad) => {
+      const x = rad * Math.cos(ph), z = rad * Math.sin(ph);
+      const y1 = -z * Math.sin(rt), z1 = z * Math.cos(rt);
+      const x2 = x * Math.cos(rz) - y1 * Math.sin(rz), y2 = x * Math.sin(rz) + y1 * Math.cos(rz);
+      return [P([x2, y2, z1]), z1];
+    };
+    let orbitBack = '', orbitFront = '';
+    for (let i = 0; i < 96; i++) {
+      const p0 = ringPt(i / 96 * Math.PI * 2, 178), p1 = ringPt((i + 1) / 96 * Math.PI * 2, 178);
+      const seg = 'M' + fmt(p0[0]) + 'L' + fmt(p1[0]);
+      if (p0[1] + p1[1] > 0) orbitBack += seg; else orbitFront += seg;
+    }
+    this.parts.forEach((p) => {
+      const ph = p.phi + ra;
+      let x = p.rad * Math.cos(ph), y = p.y, z = p.rad * Math.sin(ph);
+      const y1 = y * Math.cos(rt) - z * Math.sin(rt), z1 = y * Math.sin(rt) + z * Math.cos(rt);
+      const x2 = x * Math.cos(rz) - y1 * Math.sin(rz), y2 = x * Math.sin(rz) + y1 * Math.cos(rz);
+      const q = P([x2, y2, z1]);
+      const s = 'M' + q[0].toFixed(1) + ',' + q[1].toFixed(1) + 'h0.01';
+      if (z1 > 0) { if (p.big) backB += s; else backS += s; }
+      else if (p.gold) frontG += s;
+      else if (p.big) frontB += s; else frontS += s;
+    });
+
+    // --- corona ---
+    const d = { W: '', B: '', T: '', G: '', L: '' };
+    const r0 = 40;
+    this.rays.forEach((ry) => {
+      const len = ry.len * (0.78 + 0.22 * Math.sin(t * ry.sp + ry.ph));
+      const c = Math.cos(ry.th), s = Math.sin(ry.th);
+      d[ry.g] += 'M' + (280 + c * r0).toFixed(1) + ',' + (150 + s * r0).toFixed(1) + 'L' + (280 + c * (r0 + len)).toFixed(1) + ',' + (150 + s * (r0 + len)).toFixed(1);
+    });
+
+    return {
+      small: this.sky.small, mid: this.sky.mid, bright: this.sky.bright, dust: this.sky.dust,
+      skyRot: 'rotate(' + (t * 2).toFixed(2) + ' 280 250)',
+      skyMove: 'translate(' + (-yaw * 18).toFixed(1) + ' ' + ((0.34 - tilt) * 30).toFixed(1) + ')',
+      coronaRot: 'rotate(' + (t * 6).toFixed(2) + ' 280 150)',
+      cW: d.W, cB: d.B, cT: d.T, cG: d.G, cL: d.L,
+      hazeOp: (0.85 + 0.15 * Math.sin(t * 1.6)).toFixed(3),
+      sunR: (38 + 1.5 * Math.sin(t * 2.3)).toFixed(1),
+      s0: sides[0], s1: sides[1], s2: sides[2],
+      frontTri: F.map((p) => fmt(P(p))).join(' '),
+      backTri: Bk.map((p) => fmt(P(p))).join(' '),
+      ax: { x1: apex[0].toFixed(1), y1: apex[1].toFixed(1), x2: baseMid[0].toFixed(1), y2: baseMid[1].toFixed(1) },
+      glint: (16 + 6 * Math.sin(t * 2.4)).toFixed(1),
+      backS, backB, frontS, frontB, frontG, orbitBack, orbitFront,
+      chartRot: 'rotate(' + (t * 2.2).toFixed(2) + ' 280 260)',
+      sweepRot: 'rotate(' + ((t * 50) % 360).toFixed(2) + ' 280 260)',
+      con0: this.lit(t, 160, 153), con1: this.lit(t, 400, 77), con2: this.lit(t, 405, 390),
+      onMove: (e) => {
+        const rc = e.currentTarget.getBoundingClientRect();
+        const nx = (e.clientX - rc.left) / rc.width, ny = (e.clientY - rc.top) / rc.height;
+        this.setState({ ty: (nx - 0.5) * 2.2, tt: 0.05 + ny * 0.6 });
+      },
+      onLeave: () => this.setState({ ty: 0, tt: 0.34 })
+    };
+  }
+}
+const g=(v,p)=>p.split('.').reduce((o,k)=>o==null?o:o[k],v);
+const stage=document.getElementById('stage');
+const c=new Component({});
+const draw=()=>{ const v=c.renderVals(); stage.innerHTML=`<svg viewBox="0 0 560 520" width="100%" style="display: block" onMouseMove="${g(v,"onMove")}" onMouseLeave="${g(v,"onLeave")}" role="img" aria-label="The PRISM triangle as a thick glass slab, swaying in front of a slowly turning star chart with constellations, with a ring of light orbiting through it">
+    <defs>
+      <radialGradient id="haze" cx="280" cy="150" r="260" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#8796A9" stop-opacity="0.42"></stop>
+        <stop offset="0.3" stop-color="#5F86AD" stop-opacity="0.14"></stop>
+        <stop offset="1" stop-color="#5F86AD" stop-opacity="0"></stop>
+      </radialGradient>
+      <radialGradient id="sun" cx="280" cy="150" r="40" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#1F4E79"></stop>
+        <stop offset="0.75" stop-color="#FFF6E2"></stop>
+        <stop offset="1" stop-color="#F2DDB0"></stop>
+      </radialGradient>
+      <radialGradient id="fade" cx="280" cy="150" r="185" gradientUnits="userSpaceOnUse">
+        <stop offset="0.2" stop-color="#1F4E79"></stop>
+        <stop offset="1" stop-color="#000000"></stop>
+      </radialGradient>
+      <linearGradient id="glass" gradientUnits="userSpaceOnUse" x1="280" y1="130" x2="280" y2="390">
+        <stop offset="0" stop-color="#FFFFFF"></stop>
+        <stop offset="0.55" stop-color="#D6E3F0"></stop>
+        <stop offset="1" stop-color="#8FB0CF"></stop>
+      </linearGradient>
+      <radialGradient id="glintG" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#1F4E79"></stop>
+        <stop offset="0.35" stop-color="#FFF6E2" stop-opacity="0.7"></stop>
+        <stop offset="1" stop-color="#F2DDB0" stop-opacity="0"></stop>
+      </radialGradient>
+      <mask id="coronaFade" maskUnits="userSpaceOnUse" x="0" y="0" width="560" height="520">
+        <rect x="0" y="0" width="560" height="520" fill="url(#fade)"></rect>
+      </mask>
+    </defs>
+
+    <!-- star field -->
+    <g transform="${g(v,"skyMove")}">
+      <g transform="${g(v,"skyRot")}">
+        <path d="${g(v,"dust")}" stroke="#93A3B6" stroke-opacity="0.35" stroke-width="0.8" stroke-linecap="round" fill="none"></path>
+        <path d="${g(v,"small")}" stroke="#8796A9" stroke-opacity="0.5" stroke-width="1.1" stroke-linecap="round" fill="none"></path>
+        <path d="${g(v,"mid")}" stroke="#2F5D88" stroke-opacity="0.85" stroke-width="1.8" stroke-linecap="round" fill="none"></path>
+        <path d="${g(v,"bright")}" stroke="#1F4E79" stroke-width="2.6" stroke-linecap="round" fill="none"></path>
+      </g>
+    </g>
+
+    <!-- celestial chart, turning with the sky -->
+    <g transform="${g(v,"chartRot")}">
+      <circle cx="280" cy="260" r="235" fill="none" stroke="#5F86AD" stroke-opacity="0.3" stroke-width="0.9"></circle>
+      <circle cx="280" cy="260" r="240" fill="none" stroke="#5F86AD" stroke-opacity="0.35" stroke-width="7" stroke-dasharray="0.8 20.14"></circle>
+      <circle cx="280" cy="260" r="240" fill="none" stroke="#5F86AD" stroke-opacity="0.55" stroke-width="13" stroke-dasharray="1.2 124.46"></circle>
+      <circle cx="280" cy="260" r="240" fill="none" stroke="#B07A2A" stroke-opacity="0.85" stroke-width="15" stroke-dasharray="1.6 375.4"></circle>
+      <circle cx="280" cy="260" r="160" fill="none" stroke="#5F86AD" stroke-opacity="0.16" stroke-width="0.8" stroke-dasharray="2 6"></circle>
+      <circle cx="280" cy="260" r="82" fill="none" stroke="#5F86AD" stroke-opacity="0.16" stroke-width="0.8" stroke-dasharray="2 6"></circle>
+      <path d="M310.0,260.0L512.0,260.0M306.0,275.0L480.9,376.0M295.0,286.0L396.0,460.9M280.0,290.0L280.0,492.0M265.0,286.0L164.0,460.9M254.0,275.0L79.1,376.0M250.0,260.0L48.0,260.0M254.0,245.0L79.1,144.0M265.0,234.0L164.0,59.1M280.0,230.0L280.0,28.0M295.0,234.0L396.0,59.1M306.0,245.0L480.9,144.0" stroke="#5F86AD" stroke-opacity="0.1" stroke-width="0.8" fill="none"></path>
+      <ellipse cx="280" cy="260" rx="205" ry="118" fill="none" stroke="#B07A2A" stroke-opacity="0.4" stroke-width="0.9" stroke-dasharray="5 5" transform="rotate(23.4 280 260)"></ellipse>
+      <g opacity="${g(v,"con0")}"><path d="M92.0,118.0L126.0,124.8M126.0,124.8L153.2,136.7M153.2,136.7L177.0,152.0M177.0,152.0L183.8,180.9M183.8,180.9L219.5,187.7M219.5,187.7L228.0,157.1M228.0,157.1L177.0,152.0" stroke="#5F86AD" stroke-opacity="0.4" stroke-width="0.8" fill="none"></path><circle cx="92.0" cy="118.0" r="2.2" fill="#2F5D88" fill-opacity="1"></circle><circle cx="126.0" cy="124.8" r="1.8" fill="#2F5D88" fill-opacity="1"></circle><circle cx="153.2" cy="136.7" r="1.8" fill="#2F5D88" fill-opacity="1"></circle><circle cx="177.0" cy="152.0" r="1.7" fill="#2F5D88" fill-opacity="1"></circle><circle cx="183.8" cy="180.9" r="2.0" fill="#2F5D88" fill-opacity="1"></circle><circle cx="219.5" cy="187.7" r="2.4" fill="#2F5D88" fill-opacity="1"></circle><circle cx="228.0" cy="157.1" r="2.2" fill="#2F5D88" fill-opacity="1"></circle></g>
+      <g opacity="${g(v,"con1")}"><path d="M350.0,82.0L377.0,64.0M377.0,64.0L399.5,89.2M399.5,89.2L426.5,71.2M426.5,71.2L449.0,91.0" stroke="#5F86AD" stroke-opacity="0.4" stroke-width="0.8" fill="none"></path><circle cx="350.0" cy="82.0" r="2.1" fill="#2F5D88" fill-opacity="1"></circle><circle cx="377.0" cy="64.0" r="2.5" fill="#2F5D88" fill-opacity="1"></circle><circle cx="399.5" cy="89.2" r="2.3" fill="#2F5D88" fill-opacity="1"></circle><circle cx="426.5" cy="71.2" r="1.9" fill="#2F5D88" fill-opacity="1"></circle><circle cx="449.0" cy="91.0" r="2.1" fill="#2F5D88" fill-opacity="1"></circle></g>
+      <g opacity="${g(v,"con2")}"><path d="M372.0,340.0L392.9,395.1M438.5,334.3L417.6,402.7M392.9,395.1L405.2,398.9M405.2,398.9L417.6,402.7M392.9,395.1L381.5,454.0M417.6,402.7L436.6,450.2M372.0,340.0L406.2,315.3M438.5,334.3L406.2,315.3" stroke="#5F86AD" stroke-opacity="0.4" stroke-width="0.8" fill="none"></path><circle cx="372.0" cy="340.0" r="2.9" fill="#2F5D88" fill-opacity="1"></circle><circle cx="438.5" cy="334.3" r="2.5" fill="#2F5D88" fill-opacity="1"></circle><circle cx="392.9" cy="395.1" r="1.9" fill="#2F5D88" fill-opacity="1"></circle><circle cx="405.2" cy="398.9" r="1.9" fill="#2F5D88" fill-opacity="1"></circle><circle cx="417.6" cy="402.7" r="1.9" fill="#2F5D88" fill-opacity="1"></circle><circle cx="381.5" cy="454.0" r="2.3" fill="#2F5D88" fill-opacity="1"></circle><circle cx="436.6" cy="450.2" r="2.9" fill="#2F5D88" fill-opacity="1"></circle><circle cx="406.2" cy="315.3" r="1.6" fill="#2F5D88" fill-opacity="1"></circle></g>
+    </g>
+
+    <!-- the sweep: circles the chart and lights each constellation as it passes -->
+    <g transform="${g(v,"sweepRot")}">
+      <path d="M440,260 L515,260 A235,235 0 0,0 503.8,188.3 L432.3,211.2 A160,160 0 0,1 440,260 Z" fill="#5F86AD" fill-opacity="0.05"></path>
+      <path d="M440,260 L515,260 A235,235 0 0,0 512.7,227.2 L438.4,237.7 A160,160 0 0,1 440,260 Z" fill="#5F86AD" fill-opacity="0.07"></path>
+      <line x1="440" y1="260" x2="515" y2="260" stroke="#5F86AD" stroke-opacity="0.55" stroke-width="1"></line>
+      <circle cx="515" cy="260" r="2.4" fill="#B07A2A"></circle>
+    </g>
+
+    <!-- orbiting light, far side -->
+    <path d="${g(v,"orbitBack")}" stroke="#5F86AD" stroke-opacity="0.22" stroke-width="1" fill="none"></path>
+    <path d="${g(v,"backS")}" stroke="#5F86AD" stroke-opacity="0.55" stroke-width="1.8" stroke-linecap="round" fill="none"></path>
+    <path d="${g(v,"backB")}" stroke="#8796A9" stroke-opacity="0.7" stroke-width="2.6" stroke-linecap="round" fill="none"></path>
+
+    <!-- the PRISM triangle as a thick glass slab -->
+    <polygon points="${g(v,"backTri")}" fill="none" stroke="#93A3B6" stroke-opacity="0.2" stroke-width="1" stroke-linejoin="round"></polygon>
+    <g stroke="#2F5D88" stroke-width="0.9" stroke-linejoin="round">
+      <polygon points="${g(v,"s0.pts")}" fill="${g(v,"s0.fill")}" fill-opacity="${g(v,"s0.op")}" stroke-opacity="${g(v,"s0.line")}"></polygon>
+      <polygon points="${g(v,"s1.pts")}" fill="${g(v,"s1.fill")}" fill-opacity="${g(v,"s1.op")}" stroke-opacity="${g(v,"s1.line")}"></polygon>
+      <polygon points="${g(v,"s2.pts")}" fill="${g(v,"s2.fill")}" fill-opacity="${g(v,"s2.op")}" stroke-opacity="${g(v,"s2.line")}"></polygon>
+    </g>
+    <polygon points="${g(v,"frontTri")}" fill="url(#glass)" fill-opacity="0.75" stroke="#5F86AD" stroke-opacity="0.18" stroke-width="7" stroke-linejoin="round"></polygon>
+    <polygon points="${g(v,"frontTri")}" fill="none" stroke="#1F4E79" stroke-opacity="0.95" stroke-width="1.6" stroke-linejoin="round"></polygon>
+    <line x1="${g(v,"ax.x1")}" y1="${g(v,"ax.y1")}" x2="${g(v,"ax.x2")}" y2="${g(v,"ax.y2")}" stroke="#B07A2A" stroke-opacity="0.85" stroke-width="1.6"></line>
+
+    <!-- orbiting light, near side -->
+    <path d="${g(v,"orbitFront")}" stroke="#93A3B6" stroke-opacity="0.45" stroke-width="1.2" fill="none"></path>
+    <path d="${g(v,"frontS")}" stroke="#8796A9" stroke-opacity="0.75" stroke-width="2" stroke-linecap="round" fill="none"></path>
+    <path d="${g(v,"frontB")}" stroke="#1F4E79" stroke-width="3.2" stroke-linecap="round" fill="none"></path>
+    <path d="${g(v,"frontG")}" stroke="#B07A2A" stroke-width="3" stroke-linecap="round" fill="none"></path>
+  </svg>`; };
+stage.addEventListener('mousemove',(e)=>c.renderVals().onMove({currentTarget:stage,clientX:e.clientX,clientY:e.clientY}));
+stage.addEventListener('mouseleave',()=>c.renderVals().onLeave());
+c.componentDidMount();
+draw();
+if (c.timer) setInterval(draw, 33);
+</script>
+</body>
+</html>
