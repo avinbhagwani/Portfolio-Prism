@@ -13,7 +13,9 @@ Home: PRISM as a small solar system that fills the page.
 The scene is static/home-solar.html in an st.iframe, the one place
 JavaScript is allowed. A click on a world clicks the matching hidden
 st.page_link below, so moving to a tool keeps the session exactly as
-the left navigation does.
+the left navigation does. The camera flies into the world first, and
+the tool page opens out of that world's colour (views/intro.py); coming
+back, the system zooms out of the world that was just left.
 """
 
 import json
@@ -46,7 +48,7 @@ _WORDS = {5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine"}
 CSS = """
 <style>
 /* Home only: the scene fills the whole main area, edge to edge */
-[data-testid="stMain"] {position:relative; background:#0A1522; overflow:hidden;}
+[data-testid="stMain"] {background:#0A1522; overflow:hidden;}
 [data-testid="stMainBlockContainer"] {max-width:none; padding:0; height:100vh;}
 [data-testid="stHeader"] {background:transparent;}
 .st-key-solar_stage {position:absolute; inset:0; z-index:1; height:100vh !important;}
@@ -98,6 +100,8 @@ def render():
                  f"what really drives them. {_WORDS.get(len(worlds), len(worlds))} worlds, "
                  "one question each."),
         "tour": "New here? Start with the tour",
+        # the page just left, so the system can zoom back out of its world
+        "from": st.session_state.get("solar_from"),
         "stats": [[n_idx, "Nifty equity indices"], [years, "years of history"],
                   [n_models, "factor models"], ["Free", "to use"]],
     }

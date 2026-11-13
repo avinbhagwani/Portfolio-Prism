@@ -60,11 +60,20 @@ previous = st.session_state.get("last_page")
 switched = previous is not None and previous != current
 if switched:
     st.session_state["transition_n"] = st.session_state.get("transition_n", 0) + 1
+    # Home is a solar system. Leaving it, the page opens out of the world
+    # that was flown into; returning, the system zooms back out of the
+    # world just left (views/home.py reads solar_from).
+    st.session_state["solar_from"] = (
+        {"path": previous, "n": st.session_state["transition_n"]}
+        if current == "home" else None)
 intro.show(
     first_visit=first_visit,
     transition_to=page.title if switched else None,
     page_key=current,
     nonce=st.session_state.get("transition_n", 0),
+    arrive_colour=style.LINES[current][0] if switched and previous == "home"
+    and current in style.LINES else None,
+    quiet=switched and current == "home",
 )
 st.session_state["intro_shown"] = True
 st.session_state["last_page"] = current

@@ -9,10 +9,9 @@ The look is "the observatory": the left navigation is the night sky
 Design rules:
   * Light and minimal, navy ink and rust. Ink is the action colour;
     rust is kept for losses and warnings only.
-  * Three voices. Instrument Serif speaks (titles only, never figures:
-    its 1 reads as an l), Inter works (controls, tables, every number,
-    the computed finding), IBM Plex Mono
-    labels (the small mark above a title, section marks, the nav).
+  * Two voices. Inter does the work (titles, controls, tables, every
+    number, the computed finding); IBM Plex Mono labels (the small mark
+    above a title, section marks, the nav).
   * Every tool owns one spectral line: a colour that marks it in the
     navigation and above its page title. See LINES below.
   * Structure through space and hairlines: control panels sit on warm
@@ -30,7 +29,6 @@ NAVY = "#1F4E79"
 RUST = "#B54A3C"
 BRASS = "#B08A3E"
 
-SERIF = "'Instrument Serif', 'Iowan Old Style', Georgia, serif"
 MONO = "'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace"
 
 # url_path -> (spectral line colour, index shown in the navigation)
@@ -50,10 +48,11 @@ CSS = f"""
 :root {{
   --ink:{INK}; --muted:{MUTED}; --faint:{FAINT}; --line:{LINE};
   --mist:{MIST}; --navy:{NAVY}; --rust:{RUST}; --brass:{BRASS};
-  --serif:{SERIF}; --mono:{MONO};
+  --mono:{MONO};
 }}
 
 /* ---------- page frame ---------- */
+[data-testid="stMain"] {{ position:relative; }}
 [data-testid="stMainBlockContainer"] {{
   max-width:1120px; padding-top:3rem; padding-bottom:4.5rem;
 }}
@@ -62,7 +61,7 @@ html, body, [data-testid="stApp"] {{ font-variant-numeric:tabular-nums; }}
 
 /* ---------- page header (shared by every tool) ----------
    mark:  a short spectral line in the tool's colour, then its name
-   title: the question the page answers, in the serif                */
+   title: the question the page answers                              */
 [data-testid="stMain"] .fbi-eyebrow, [data-testid="stMain"] .pw-eyebrow,
 [data-testid="stMain"] .ph-section {{
   display:flex; align-items:center; gap:0.7rem;
@@ -75,9 +74,8 @@ html, body, [data-testid="stApp"] {{ font-variant-numeric:tabular-nums; }}
   content:""; width:28px; height:2px; border-radius:2px; background:var(--tool, var(--brass));
 }}
 [data-testid="stMain"] .fbi-title, [data-testid="stMain"] .pw-title {{
-  font-family:var(--serif); font-size:3.05rem; font-weight:400; color:var(--ink);
-  line-height:1.04; letter-spacing:-0.012em; margin:0 0 0.9rem 0; max-width:44rem;
-  text-wrap:balance;
+  font-size:2.25rem; font-weight:600; color:var(--ink); line-height:1.12;
+  letter-spacing:-0.025em; margin:0 0 0.55rem 0; max-width:40rem;
 }}
 [data-testid="stMain"] .fbi-sub, [data-testid="stMain"] .pw-sub {{
   font-size:1.02rem; line-height:1.6; color:var(--muted);
@@ -242,7 +240,7 @@ div[role="dialog"] {{ border-radius:16px !important; }}
 /* ---------- phones ---------- */
 @media (max-width: 640px) {{
   [data-testid="stMainBlockContainer"] {{ padding-top:1.4rem; }}
-  [data-testid="stMain"] .fbi-title, [data-testid="stMain"] .pw-title {{ font-size:2.2rem; }}
+  [data-testid="stMain"] .fbi-title, [data-testid="stMain"] .pw-title {{ font-size:1.7rem; }}
   [data-testid="stMain"] .fbi-sub, [data-testid="stMain"] .pw-sub {{ font-size:0.96rem; margin-bottom:1.3rem; }}
   [data-testid="stMain"] .fbi-headline {{ font-size:1.16rem; }}
   [class*="st-key-controls"] {{ padding:14px 14px 16px 14px; border-radius:12px; }}

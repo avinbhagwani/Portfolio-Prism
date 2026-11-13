@@ -39,18 +39,6 @@ url = "app/static/fonts/Inter-Bold.woff2"
 weight = 700
 
 [[theme.fontFaces]]
-family = "Instrument Serif"
-url = "app/static/fonts/InstrumentSerif-Regular.woff2"
-weight = 400
-style = "normal"
-
-[[theme.fontFaces]]
-family = "Instrument Serif"
-url = "app/static/fonts/InstrumentSerif-Italic.woff2"
-weight = 400
-style = "italic"
-
-[[theme.fontFaces]]
 family = "IBM Plex Mono"
 url = "app/static/fonts/IBMPlexMono-Regular.woff2"
 weight = 400

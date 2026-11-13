@@ -183,11 +183,31 @@ TRANSITION_HTML = """
 """
 
 
+# Arriving from the solar system: the page opens out of the colour of the
+# world that was flown into, so the zoom carries straight through.
+ARRIVE_HTML = """
+<style>
+.pa-overlay {
+  position: absolute; top: 0; left: 0; right: 0; height: 100vh; z-index: 999990;
+  background: COLOUR; pointer-events: none;
+  /* the spread fills the rest of the main area, whatever box this sits in;
+     the main area's own scroll clipping keeps it off the navigation */
+  box-shadow: 0 0 0 200vmax COLOUR;
+  animation: pa-out 0.95s cubic-bezier(.45,0,.2,1) 0.1s forwards;
+}
+@keyframes pa-out { to { opacity: 0; visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .pa-overlay { animation-duration: 0.2s; } }
+</style>
+<div class="pa-overlay" aria-hidden="true" data-n="NONCE"></div>
+"""
+
+
 def _page_fade(svg):
     return round(max(_animation_end(svg), 0.8) + HOLD, 2)
 
 
-def show(first_visit=True, transition_to=None, page_key=None, nonce=0):
+def show(first_visit=True, transition_to=None, page_key=None, nonce=0,
+         arrive_colour=None, quiet=False):
     """
     Render the overlay slot. Always called (empty when nothing plays) so
     every element below keeps its position between reruns; otherwise
@@ -197,9 +217,16 @@ def show(first_visit=True, transition_to=None, page_key=None, nonce=0):
     transition_to  short transition naming the destination page, using
                    that page's own animation (page_key) or the prism;
                    nonce makes each one a fresh element so it replays
+    arrive_colour  coming from the solar system: open out of this colour
+                   instead of showing the transition card
+    quiet          going back to the solar system, which zooms out itself
     """
     if first_visit:
         st.html(INTRO_HTML)
+    elif transition_to and quiet:
+        st.html("<div hidden></div>")
+    elif transition_to and arrive_colour:
+        st.html(ARRIVE_HTML.replace("NONCE", str(nonce)).replace("COLOUR", arrive_colour))
     elif transition_to:
         svg = PAGE_ANIMATIONS.get(page_key, TRANSITION_SVG)
         st.html(TRANSITION_HTML.replace("NONCE", str(nonce))
