@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+@font-face { font-family: Inter; src: url("/app/static/fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: Inter; src: url("/app/static/fonts/Inter-Medium.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: Inter; src: url("/app/static/fonts/Inter-SemiBold.woff2") format("woff2"); font-weight: 600; }
+@font-face { font-family: "Instrument Serif"; src: url("/app/static/fonts/InstrumentSerif-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; }
+@font-face { font-family: "Instrument Serif"; src: url("/app/static/fonts/InstrumentSerif-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/app/static/fonts/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/app/static/fonts/IBMPlexMono-Medium.woff2") format("woff2"); font-weight: 500; }
+
+:root { --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+        --serif: "Instrument Serif", Georgia, serif; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0A1522;
+  font-family: Inter, system-ui, sans-serif; color: #D5DEE8;
+  user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+#stage { position: fixed; inset: 0; overflow: hidden; cursor: grab;
+  background:
+    radial-gradient(60% 50% at 82% 12%, rgba(53,163,168,.10), transparent 70%),
+    radial-gradient(55% 50% at 10% 95%, rgba(162,116,181,.11), transparent 70%),
+    radial-gradient(40% 40% at 50% 52%, rgba(217,179,106,.07), transparent 70%),
+    linear-gradient(180deg, #0A1522 0%, #0B1828 55%, #0A1320 100%); }
+#stage.drag { cursor: grabbing; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; }
+
+/* ---------- words ---------- */
+.head { position: absolute; left: clamp(20px, 4vw, 56px); top: clamp(22px, 5vh, 52px);
+  max-width: 25rem; pointer-events: none; opacity: 0; animation: rise .9s ease .25s forwards; }
+.head h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(2rem, 3.6vw, 3.1rem);
+  line-height: 1.0; letter-spacing: -0.01em; color: #F3F6F9; margin: 0 0 .8rem 0; }
+.head h1 em { font-style: italic; padding-right: .05em;
+  background: linear-gradient(90deg, #7FB0DE, #4FC0C4 30%, #E0B45C 55%, #86C389 75%, #BC90CF);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.head p { margin: 0; font-size: .95rem; line-height: 1.55; color: #9FB2C6; max-width: 21rem; }
+.foot { position: absolute; left: clamp(20px, 4vw, 56px); right: clamp(20px, 4vw, 56px);
+  bottom: clamp(16px, 3.4vh, 30px); display: flex; justify-content: space-between; align-items: flex-end;
+  gap: 1.5rem; pointer-events: none; font-family: var(--mono); font-size: .66rem;
+  letter-spacing: .1em; text-transform: uppercase; color: #6C8299;
+  opacity: 0; animation: rise .9s ease .7s forwards; }
+.foot b { font-weight: 500; color: #C9D4DF; }
+.foot .stats { white-space: nowrap; }
+.foot .stats span + span::before { content: "\00b7"; margin: 0 .7em; color: #3D536B; }
+.foot .hint { transition: opacity .8s ease; white-space: nowrap; padding-right: 13.5rem; }
+.foot .hint.gone { opacity: 0; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---------- worlds: one real button each, moved every frame ---------- */
+.w { position: absolute; left: 0; top: 0; margin: 0; padding: 0; border: 0; background: none;
+  color: inherit; font: inherit; cursor: pointer; will-change: transform; outline: none; }
+.w .hit { position: absolute; left: 50%; top: 50%; border-radius: 50%; transform: translate(-50%, -50%); }
+.w:focus-visible .hit { outline: 2px solid #D9B36A; outline-offset: 3px; }
+.w .lab { position: absolute; left: 50%; transform: translateX(-50%); text-align: center;
+  white-space: nowrap; pointer-events: none; padding: 5px 9px 6px; border-radius: 8px;
+  transition: background .2s ease, box-shadow .2s ease, opacity .3s ease; }
+.w .lab b { display: block; font-family: var(--mono); font-weight: 500; font-size: .66rem;
+  letter-spacing: .12em; text-transform: uppercase; color: #AFC0D1; transition: color .2s ease; }
+.w .lab i { display: block; font-style: normal; font-size: .8rem; line-height: 1.35; color: #C9D4DF;
+  max-height: 0; opacity: 0; overflow: hidden; transition: max-height .25s ease, opacity .25s ease, margin .25s ease; }
+.w .lab u { display: block; text-decoration: none; font-family: var(--mono); font-size: .62rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--c); max-height: 0; opacity: 0; overflow: hidden;
+  transition: max-height .25s ease, opacity .25s ease, margin .25s ease; }
+.w.on { z-index: 5; }
+.w.on .lab { background: rgba(10,21,34,.86); box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 45%, transparent),
+  0 10px 30px -10px rgba(0,0,0,.7); backdrop-filter: blur(6px); }
+.w.on .lab b { color: #fff; }
+.w.on .lab i { max-height: 3em; opacity: 1; margin-top: 4px; }
+.w.on .lab u { max-height: 2em; opacity: 1; margin-top: 5px; }
+.w.back .lab { opacity: .62; }
+.w.soon { cursor: default; }
+.w.soon .lab b { color: #5D7389; }
+.w.soon .lab s { display: block; text-decoration: none; font-family: var(--mono); font-size: .58rem;
+  letter-spacing: .12em; text-transform: uppercase; color: #46607A; margin-top: 3px; }
+.w.star .lab { opacity: 0; }
+.w.star.on .lab { opacity: 1; }
+.leaving .w .lab, .leaving .head, .leaving .foot { opacity: 0 !important; transition: opacity .25s ease; }
+#veil { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: #0A1522; transition: opacity .32s ease .18s; }
+.leaving #veil { opacity: 1; }
+
+@media (max-width: 1100px) { .foot .hint { display: none; } }
+@media (max-width: 640px) {
+  .head { top: 64px; }
+  .w .lab b { font-size: .58rem; letter-spacing: .08em; }
+  .w.soon .lab { display: none; }
+  .head p { font-size: .88rem; }
+  .foot { flex-direction: column; align-items: flex-start; gap: .5rem; font-size: .6rem; }
+  .foot .hint { padding-right: 0; }
+  .foot .stats span:nth-child(n+3) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .head, .foot { animation: none; opacity: 1; }
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <div class="head">
+    <h1>Every return has a <em>spectrum</em>.</h1>
+    <p id="lede"></p>
+  </div>
+  <nav id="worlds" aria-label="PRISM tools"></nav>
+  <div class="foot">
+    <div class="stats" id="stats"></div>
+    <div class="hint" id="hint">Click a world to open it &nbsp;·&nbsp; drag to spin</div>
+  </div>
+  <div id="veil"></div>
+</div>
+
+<script>
+/* The home page: a small solar system. The star is PRISM; every world is
+   a page. Worlds are real <button>s (so keyboard and screen readers work)
+   that a canvas paints underneath. Clicking one clicks the matching
+   Streamlit page link in the parent page, so the session is kept. */
+const D = __DATA__;
+const stage = document.getElementById("stage"), cv = document.getElementById("sky"), g = cv.getContext("2d");
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const TAU = Math.PI * 2;
+
+/* look of each world; names, purposes and paths come from Python */
+const LOOK = {
+  "factor-analysis":    { orbit: 0, size: 13, period: 46,  phase: 0.75, c: "#5B93C7", hi: "#A9CDF0", kind: "bands" },
+  "fbi-intelligence":   { orbit: 1, size: 15.5, period: 66,  phase: 2.75, c: "#35A3A8", hi: "#8FDCDD", kind: "moon" },
+  "drawdown-analysis":  { orbit: 2, size: 14.5, period: 90,  phase: 4.25, c: "#C9604F", hi: "#F0A795", kind: "craters" },
+  "efficient-frontier": { orbit: 3, size: 17.5, period: 120, phase: 5.55, c: "#6BAA6E", hi: "#B5DDB3", kind: "ring" },
+  "try-to-time":        { orbit: 4, size: 11, period: 158, phase: 1.35, c: "#D2A244", hi: "#F4D48F", kind: "plain" },
+  "can-you-handle-it":  { orbit: 4, size: 11, period: 158, phase: 1.35 + Math.PI, c: "#A274B5", hi: "#D6B5E3", kind: "plain" },
+  "writing":            { comet: true, size: 5, period: 84, phase: 2.2, c: "#C9D7E6", hi: "#FFFFFF", kind: "comet" },
+};
+const SOON_LOOK = [
+  { orbit: 5, size: 8, period: 210, phase: 0.2 },
+  { orbit: 5, size: 8, period: 210, phase: 3.45 },
+];
+const ORBITS = [0.25, 0.38, 0.51, 0.65, 0.81, 0.97];
+
+document.getElementById("lede").textContent = D.lede;
+document.getElementById("stats").innerHTML = D.stats.map(s => `<span><b>${s[0]}</b> ${s[1]}</span>`).join("");
+
+/* ---------- build the worlds ---------- */
+const nav = document.getElementById("worlds");
+const worlds = [];
+function addWorld(o) {
+  const el = document.createElement(o.soon ? "div" : "button");
+  el.className = "w" + (o.soon ? " soon" : "");
+  el.style.setProperty("--c", o.c || "#7F93A8");
+  if (!o.soon) { el.type = "button"; el.setAttribute("aria-label", `${o.name}: ${o.desc}`); }
+  el.innerHTML = `<span class="hit"></span><span class="lab"><b>${o.name}</b>` +
+    (o.soon ? `<s>${o.tag}</s>` : `<i>${o.desc}</i><u>${o.cta || "Open"} &rarr;</u>`) + `</span>`;
+  if (o.sun) el.classList.add("star");
+  nav.appendChild(el);
+  o.el = el; o.hit = el.firstChild; o.lab = el.lastChild; o.hover = 0; o.x = o.y = 0;
+  worlds.push(o);
+  if (o.soon) return;
+  el.addEventListener("pointerenter", () => { if (!dragging) setActive(o); });
+  el.addEventListener("pointerleave", () => { if (active === o) setActive(null); });
+  el.addEventListener("focus", () => setActive(o));
+  el.addEventListener("blur", () => { if (active === o) setActive(null); });
+  el.addEventListener("click", () => { if (moved < 6) leave(o); });
+}
+/* tab order follows the navigation: tools, games, writing, then the star */
+D.worlds.forEach(w => addWorld(Object.assign({}, LOOK[w.path], w)));
+const sun = { sun: true, name: "PRISM", desc: D.tour, cta: "Take the tour", c: "#E8C377", size: 21 };
+addWorld(sun);
+D.soon.forEach((n, i) => addWorld(Object.assign({ soon: true, name: n, tag: "On the way" }, SOON_LOOK[i % 2])));
+
+let active = null, leaving = false;
+function setActive(o) {
+  if (leaving) return;
+  if (active) { active.el.classList.remove("on"); active.lw = 0; }
+  active = o;
+  if (o) { o.el.classList.add("on"); document.getElementById("hint").classList.add("gone"); }
+}
+
+/* ---------- going somewhere ---------- */
+function parentClick(sel) {
+  try { const a = window.parent.document.querySelector(sel); if (a) { a.click(); return true; } } catch (e) {}
+  return false;
+}
+function leave(o) {
+  if (leaving) return;
+  if (o.sun) { parentClick(".st-key-tut_launch_home button"); return; }
+  leaving = true; fly = { o, t0: performance.now() };
+  stage.classList.add("leaving");
+  setTimeout(() => {
+    if (parentClick(`.st-key-solar_links a[href="${o.path}"]`)) return;
+    if (parentClick(`[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][href="${o.path}"]`)) return;
+    try { window.parent.location.href = "/" + o.path; } catch (e) {}
+  }, still ? 0 : 480);
+}
+let fly = null;
+
+/* ---------- layout ---------- */
+let W = 0, H = 0, dpr = 1, cx = 0, cy = 0, A = 0, squash = 0.46, unit = 1, stars = [];
+function resize() {
+  W = stage.clientWidth; H = stage.clientHeight; dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const portrait = W < H * 0.85;
+  if (portrait) {
+    A = W / 2 - 34; cx = W / 2; cy = H * 0.57;
+    squash = Math.max(0.5, Math.min(1.12, (H * 0.43 - 60) / A));
+  } else {
+    A = Math.min(W / 2 - 84, (H / 2 - 62) / 0.46);
+    squash = Math.max(0.46, Math.min(0.62, (H / 2 - 110) / A));
+    cx = W * 0.5; cy = H * 0.52;
+  }
+  unit = Math.max(0.62, Math.min(1.2, A / 430));
+  const n = Math.round(Math.min(420, W * H / 4200));
+  let s = 7;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  stars = Array.from({ length: n }, () => ({
+    x: rnd(), y: rnd(), r: 0.35 + rnd() * rnd() * 1.25, a: 0.25 + rnd() * 0.6,
+    tw: 0.4 + rnd() * 1.6, ph: rnd() * TAU, d: 0.2 + rnd() * 0.8,
+    tint: rnd() < 0.08 ? "217,179,106" : rnd() < 0.1 ? "159,192,222" : "255,255,255" }));
+}
+addEventListener("resize", resize); resize();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => worlds.forEach(o => { o.lw = 0; }));
+
+/* ---------- pointer: parallax, drag to spin ---------- */
+let mx = 0, my = 0, spin = 0, spinV = 0, dragging = false, lastX = 0, moved = 0;
+stage.addEventListener("pointermove", e => {
+  mx = e.clientX / W - 0.5; my = e.clientY / H - 0.5;
+  if (dragging) {
+    const dx = e.clientX - lastX; lastX = e.clientX; moved += Math.abs(dx);
+    spinV = dx * -0.0045; spin += spinV;
+    if (moved > 6) { stage.classList.add("drag"); setActive(null); document.getElementById("hint").classList.add("gone"); }
+  }
+});
+stage.addEventListener("pointerdown", e => { dragging = true; lastX = e.clientX; moved = 0; spinV = 0; });
+addEventListener("pointerup", () => { dragging = false; stage.classList.remove("drag"); });
+addEventListener("pointercancel", () => { dragging = false; stage.classList.remove("drag"); });
+stage.addEventListener("pointerleave", () => { mx = my = 0; });
+
+/* ---------- drawing ---------- */
+function rgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+}
+function drawStars(t) {
+  for (const s of stars) {
+    const x = ((s.x + mx * -0.012 * s.d) * W + W) % W, y = ((s.y + my * -0.012 * s.d) * H + H) % H;
+    const a = still ? s.a : s.a * (0.72 + 0.28 * Math.sin(t * s.tw + s.ph));
+    g.fillStyle = `rgba(${s.tint},${a})`;
+    g.beginPath(); g.arc(x, y, s.r, 0, TAU); g.fill();
+  }
+}
+let shoot = null, nextShoot = 6;
+function drawShoot(t, dt) {
+  if (still) return;
+  if (!shoot && t > nextShoot) {
+    shoot = { x: Math.random() * W * 0.7, y: Math.random() * H * 0.35, life: 0 };
+    nextShoot = t + 7 + Math.random() * 9;
+  }
+  if (!shoot) return;
+  shoot.life += dt; const p = shoot.life / 0.9;
+  if (p >= 1) { shoot = null; return; }
+  const x = shoot.x + p * 260, y = shoot.y + p * 96, a = Math.sin(p * Math.PI) * 0.8;
+  const gr = g.createLinearGradient(x - 90, y - 33, x, y);
+  gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(1, `rgba(255,255,255,${a})`);
+  g.strokeStyle = gr; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x - 90, y - 33); g.lineTo(x, y); g.stroke();
+}
+function drawOrbit(i, glow) {
+  const a = ORBITS[i] * A;
+  g.beginPath(); g.ellipse(cx, cy, a, a * squash, 0, 0, TAU);
+  if (i === 5) g.setLineDash([2, 7]);
+  g.strokeStyle = glow ? rgba(glow.c, 0.2 + 0.4 * glow.hover) : `rgba(159,178,198,${i === 5 ? 0.13 : 0.15})`;
+  g.lineWidth = glow ? 1 + glow.hover * 0.5 : 1; g.stroke(); g.setLineDash([]);
+}
+function drawSun(t, o) {
+  const r = o.r, pulse = still ? 0 : Math.sin(t * 0.9) * 0.04, k = 1 + pulse + o.hover * 0.12;
+  let gr = g.createRadialGradient(cx, cy, r * 0.4, cx, cy, r * 7 * k);
+  gr.addColorStop(0, "rgba(240,205,130,.34)"); gr.addColorStop(0.25, "rgba(226,180,100,.12)");
+  gr.addColorStop(1, "rgba(226,180,100,0)");
+  g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r * 7 * k, 0, TAU); g.fill();
+  gr = g.createRadialGradient(cx - r * 0.25, cy - r * 0.3, r * 0.1, cx, cy, r * k);
+  gr.addColorStop(0, "#FFFDF4"); gr.addColorStop(0.55, "#FBE3A8"); gr.addColorStop(1, "#E0AC55");
+  g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r * k, 0, TAU); g.fill();
+  /* four fine rays, like a star seen through a telescope */
+  g.save(); g.translate(cx, cy); g.rotate(still ? 0.3 : t * 0.03 + 0.3);
+  for (let i = 0; i < 4; i++) {
+    g.rotate(Math.PI / 2);
+    const ray = g.createLinearGradient(0, 0, r * 4.4 * k, 0);
+    ray.addColorStop(0, "rgba(255,240,205,.3)"); ray.addColorStop(1, "rgba(255,240,205,0)");
+    g.strokeStyle = ray; g.lineWidth = 1; g.beginPath(); g.moveTo(r * 1.15, 0); g.lineTo(r * 3.6 * k, 0); g.stroke();
+  }
+  g.restore();
+}
+function drawBody(t, o) {
+  const x = o.x, y = o.y, r = o.r * (1 + o.hover * 0.28);
+  /* direction from the star decides which side is lit */
+  let lx = cx - x, ly = cy - y; const ll = Math.hypot(lx, ly) || 1; lx /= ll; ly /= ll;
+  if (o.soon) {
+    g.setLineDash([2, 3]); g.strokeStyle = "rgba(127,147,168,.6)"; g.lineWidth = 1;
+    g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); g.setLineDash([]);
+    g.fillStyle = "rgba(127,147,168,.10)"; g.fill();
+    return;
+  }
+  if (o.kind === "comet") {
+    const len = (26 + 9000 / (ll + 60)) * unit * (1 + o.hover * 0.3);
+    const tail = g.createLinearGradient(x, y, x - lx * len, y - ly * len);
+    tail.addColorStop(0, "rgba(220,232,246,.75)"); tail.addColorStop(1, "rgba(220,232,246,0)");
+    g.fillStyle = tail; g.beginPath();
+    g.moveTo(x + ly * r, y - lx * r); g.lineTo(x - lx * len, y - ly * len); g.lineTo(x - ly * r, y + lx * r);
+    g.closePath(); g.fill();
+    const head = g.createRadialGradient(x, y, 0, x, y, r * 3.2);
+    head.addColorStop(0, "rgba(255,255,255,.95)"); head.addColorStop(0.3, "rgba(215,228,244,.5)");
+    head.addColorStop(1, "rgba(215,228,244,0)");
+    g.fillStyle = head; g.beginPath(); g.arc(x, y, r * 3.2, 0, TAU); g.fill();
+    return;
+  }
+  /* halo */
+  const halo = g.createRadialGradient(x, y, r * 0.8, x, y, r * (2.5 + o.hover * 1.4));
+  halo.addColorStop(0, rgba(o.c, 0.3 + o.hover * 0.3)); halo.addColorStop(1, rgba(o.c, 0));
+  g.fillStyle = halo; g.beginPath(); g.arc(x, y, r * (2.5 + o.hover * 1.4), 0, TAU); g.fill();
+
+  const ringBack = () => {
+    g.strokeStyle = rgba(o.hi, 0.7); g.lineWidth = Math.max(1.2, r * 0.16);
+    g.beginPath(); g.ellipse(x, y, r * 1.85, r * 0.55, -0.35, Math.PI, TAU); g.stroke();
+  };
+  if (o.kind === "ring") ringBack();
+
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, TAU); g.clip();
+  const base = g.createRadialGradient(x + lx * r * 0.55, y + ly * r * 0.55, r * 0.1, x, y, r * 1.25);
+  base.addColorStop(0, o.hi); base.addColorStop(0.55, o.c); base.addColorStop(1, rgba(o.c, 1));
+  g.fillStyle = base; g.fillRect(x - r, y - r, r * 2, r * 2);
+  if (o.kind === "bands") {
+    g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(x - r, y - r * 0.55, r * 2, r * 0.26);
+    g.fillStyle = "rgba(8,20,34,.22)"; g.fillRect(x - r, y - r * 0.08, r * 2, r * 0.3);
+    g.fillStyle = "rgba(255,255,255,.14)"; g.fillRect(x - r, y + r * 0.45, r * 2, r * 0.2);
+  } else if (o.kind === "craters") {
+    g.fillStyle = "rgba(60,18,10,.3)";
+    [[-0.3, -0.25, 0.26], [0.35, 0.1, 0.2], [-0.1, 0.45, 0.16], [0.2, -0.5, 0.12]].forEach(c => {
+      g.beginPath(); g.arc(x + c[0] * r, y + c[1] * r, c[2] * r, 0, TAU); g.fill(); });
+  }
+  /* night side */
+  const night = g.createLinearGradient(x + lx * r * 0.2, y + ly * r * 0.2, x - lx * r, y - ly * r);
+  night.addColorStop(0, "rgba(6,14,24,0)"); night.addColorStop(1, "rgba(6,14,24,.78)");
+  g.fillStyle = night; g.fillRect(x - r, y - r, r * 2, r * 2);
+  g.restore();
+
+  if (o.kind === "ring") {
+    g.strokeStyle = rgba(o.hi, 0.9); g.lineWidth = Math.max(1.2, r * 0.16);
+    g.beginPath(); g.ellipse(x, y, r * 1.85, r * 0.55, -0.35, 0, Math.PI); g.stroke();
+  } else if (o.kind === "moon") {
+    const a = still ? 0.6 : t * 0.9;
+    g.fillStyle = "#D7E3EE"; g.beginPath();
+    g.arc(x + Math.cos(a) * r * 1.9, y + Math.sin(a) * r * 0.8, Math.max(1.6, r * 0.2), 0, TAU); g.fill();
+  }
+}
+
+/* ---------- where everything is ---------- */
+let clock = 0, speed = 1, taken = [];
+function place(o) {
+  if (o.sun) { o.x = cx; o.y = cy; o.r = o.size * unit; o.depth = 0; return; }
+  if (o.comet) {
+    /* an eccentric ellipse with the star at one focus, turned a little */
+    const a = A * 0.62, e = 0.62, b = a * Math.sqrt(1 - e * e), rot = -0.5;
+    let E = o.phase + spin + (clock / o.period) * TAU;
+    E += e * Math.sin(E) * 1.2;                       /* lingers far out, whips past the star */
+    const px = a * (Math.cos(E) - e), py = b * Math.sin(E);
+    const X = px * Math.cos(rot) - py * Math.sin(rot), Y = px * Math.sin(rot) + py * Math.cos(rot);
+    o.x = cx + X; o.y = cy + Y * squash; o.depth = Y / a; o.r = o.size * unit;
+    return;
+  }
+  const a = ORBITS[o.orbit] * A, th = o.phase + spin + (clock / o.period) * TAU;
+  o.x = cx + Math.cos(th) * a; o.y = cy + Math.sin(th) * a * squash;
+  o.depth = Math.sin(th);
+  o.r = o.size * unit * (1 + 0.16 * o.depth);
+}
+function layoutLabel(o) {
+  const r = o.r * (1 + o.hover * 0.28), hit = Math.max(44, r * 2 + 18);
+  o.hit.style.width = o.hit.style.height = hit + "px";
+  /* keep the label on screen when its world is near an edge */
+  if (!o.lw) { o.lw = o.lab.offsetWidth; o.lh = o.lab.offsetHeight; }
+  const half = o.lw / 2 + 10;
+  const shift = Math.max(half - o.x, 0) - Math.max(o.x + half - W, 0);
+  o.lab.style.transform = `translateX(calc(-50% + ${shift.toFixed(1)}px))`;
+  /* below its world by default; above when that would sit on another label or world */
+  const gap = r + (o.sun ? 12 : 7), x0 = o.x + shift - o.lw / 2, x1 = x0 + o.lw;
+  const rect = up => up ? [x0, o.y - gap - o.lh, x1, o.y - gap] : [x0, o.y + gap, x1, o.y + gap + o.lh];
+  const clash = q => taken.some(k => k.o !== o && q[0] < k[2] && q[2] > k[0] && q[1] < k[3] && q[3] > k[1]);
+  let q = rect(false);
+  if (!(o.sun && o !== active) && o !== active && clash(q) && !clash(rect(true))) q = rect(true);
+  o.lab.style.top = (q[1] - o.y) + "px";
+  if (!o.sun || o === active) { q.o = o; taken.push(q); }
+  o.el.style.transform = `translate(${o.x.toFixed(1)}px,${o.y.toFixed(1)}px)`;
+  o.el.classList.toggle("back", !o.sun && o.depth < -0.25 && o !== active);
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const t = now / 1000;
+  /* time slows to a stop while a world is being looked at */
+  const want = (active || leaving || still) ? 0 : 1;
+  speed += (want - speed) * Math.min(1, dt * 5);
+  clock += dt * speed;
+  if (!dragging) { spin += spinV; spinV *= Math.pow(0.04, dt); }
+
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  drawStars(t); drawShoot(t, dt);
+
+  for (const o of worlds) {
+    place(o);
+    o.hover += ((o === active ? 1 : 0) - o.hover) * Math.min(1, dt * 9);
+  }
+  /* fly towards the chosen world before the page changes */
+  if (fly && !still) {
+    const p = Math.min(1, (now - fly.t0) / 520), z = 1 + (p * p) * 2.4;
+    g.translate(fly.o.x, fly.o.y); g.scale(z, z); g.translate(-fly.o.x, -fly.o.y);
+  }
+  for (let i = 0; i < ORBITS.length; i++) {
+    const lit = active && !active.sun && !active.comet && active.orbit === i ? active : null;
+    drawOrbit(i, lit);
+  }
+  /* every world's disc is off limits to labels; labels claim space as they are placed */
+  taken = worlds.map(o => { const k = [o.x - o.r - 3, o.y - o.r - 3, o.x + o.r + 3, o.y + o.r + 3]; k.o = o; return k; });
+  const order = worlds.slice().sort((a, b) => a.y - b.y);
+  for (const o of order) { o.sun ? drawSun(t, o) : drawBody(t, o); layoutLabel(o); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

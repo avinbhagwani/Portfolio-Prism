@@ -1,28 +1,26 @@
 """
-Home: what PRISM is, in as few words as possible.
+Home: PRISM as a small solar system that fills the page.
 
-  Hero      "Every return has a spectrum." beside a small space scene: a
-            glass crystal among stars; a star you steer with the cursor
-            sends starlight into it, which leaves as nebula in PRISM's
-            colours. Drag the crystal to spin it; hold to charge the light
-            and release for a supernova; nearby stars form constellations
-            and stardust orbits the cursor. Drifts by itself when idle.
-  Numbers   a strip of live facts from the data
-  Lenses    one card per tool, each showing its own animation
-  Soon      what's coming (retirement planning, portfolio attribution)
-  Writing   the latest Substack article
+  The star   PRISM itself. Clicking it opens the tour.
+  Worlds     one per page, each in its own colour (the same spectral
+             line it carries in the left navigation): the four tools on
+             the inner orbits, the two games sharing an outer one, and
+             Writing as a comet. Hover or tab to a world and time stops
+             while it says what it is for; click it to go there. Drag
+             the sky to spin the system.
+  Far out    tools that are on the way, drawn as faint dashed bodies.
 
-The interactive prism is static/home-prism.html in an st.iframe,
-the one place JavaScript is allowed. Navigation stays in native
-st.page_link so moving to a tool keeps the session.
+The scene is static/home-solar.html in an st.iframe, the one place
+JavaScript is allowed. A click on a world clicks the matching hidden
+st.page_link below, so moving to a tool keeps the session exactly as
+the left navigation does.
 """
 
-import base64
+import json
 from pathlib import Path
 
 import streamlit as st
 
-from core import substack as sb
 from core.config import MODEL_CONFIG
 from core.fbi_metrics import as_of_date, equity_universe
 from core.index_data import load_index_history
@@ -31,90 +29,47 @@ from views import tutorial
 STATIC = Path(__file__).resolve().parent.parent / "static"
 PAGES = {}  # set by app.py
 
-LENSES = [
-    ("factor-analysis", "Factor Analysis", "anim-factor-analysis.svg",
-     "Split any Indian mutual fund into the factors behind its returns."),
-    ("fbi-intelligence", "FBI Intelligence", "anim-fbi-intelligence.svg",
-     "Compare Nifty factor indices on return, risk and consistency."),
-    ("drawdown-analysis", "Drawdown Analysis", "anim-drawdown-analysis.svg",
-     "How far an index fell, and how long it took to recover."),
-    ("efficient-frontier", "Efficient Frontier", "anim-efficient-frontier.svg",
-     "The best mix of indices for the risk, and whether it lasted."),
+# url_path, name, what it is for, call to action. Order = tab order.
+WORLDS = [
+    ("factor-analysis", "Factor Analysis", "What drives a fund's returns", "Open"),
+    ("fbi-intelligence", "FBI Intelligence", "How factor indices have behaved", "Open"),
+    ("drawdown-analysis", "Drawdown Analysis", "How far it fell, how long to recover", "Open"),
+    ("efficient-frontier", "Efficient Frontier", "The best mix for the risk", "Open"),
+    ("try-to-time", "Try to Time", "Pick next year's winning factor", "Play"),
+    ("can-you-handle-it", "Can You Handle It?", "Sit through a real crash", "Play"),
+    ("writing", "Writing", "Articles from my Substack", "Read"),
 ]
 
-SOON = [
-    ("Retirement planning", "Will the money last? Plan income for every stage."),
-    ("Portfolio attribution", "Which decisions added return, and which cost it."),
-]
+SOON = ["Retirement planning", "Portfolio attribution"]
+_WORDS = {5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine"}
 
 CSS = """
 <style>
-.ph-eyebrow {display:none;}
-.ph-by {display:flex; align-items:center; gap:0.7rem; font-family:var(--mono);
-  font-size:0.72rem; letter-spacing:0.14em; text-transform:uppercase; color:#5F6975;
-  margin:0 0 1.2rem 0;}
-.ph-by::before {content:""; width:28px; height:2px; border-radius:2px; background:var(--brass);}
-.ph-by b {color:#14212E; font-weight:500;}
-.ph-title {font-family:var(--serif); font-size:4.3rem; font-weight:400; color:#14212E;
-  line-height:0.98; letter-spacing:-0.015em; margin:0 0 1.3rem 0;}
-.ph-title span {font-style:italic; padding-right:0.06em;}
-.ph-title span {background: linear-gradient(90deg, #1F4E79, #2F8F9D 30%, #C08A2E 55%, #5E9A62 75%, #8E5B9F);
-  -webkit-background-clip: text; background-clip: text; color: transparent;}
-.ph-sub {font-size:1.12rem; color:#5B6572; line-height:1.55; max-width:30rem; margin:0 0 1.6rem 0;}
-.st-key-ph_ctas a {border-radius:8px !important; padding:0.55rem 1.2rem !important;
-  font-weight:500; transition:background 0.15s ease, border-color 0.15s ease;}
-.st-key-ph_ctas a p {font-size:0.95rem !important; font-weight:500 !important;}
-.st-key-ph_cta_primary a {background:#14212E !important; border:1px solid #14212E !important;}
-.st-key-ph_cta_primary a p, .st-key-ph_cta_primary a span {color:#FFFFFF !important;}
-.st-key-ph_cta_primary a:hover {background:#22364B !important;}
-.st-key-ph_cta_secondary a {background:#FFFFFF !important; border:1px solid #D9D3C5 !important;}
-.st-key-ph_cta_secondary a p, .st-key-ph_cta_secondary a span {color:#14212E !important;}
-.st-key-ph_cta_secondary a:hover {background:#F6F4EF !important; border-color:#B08A3E !important;}
-.ph-stats {display:grid; grid-template-columns:repeat(4, 1fr); margin:1.8rem 0 0.4rem 0;
-  border-top:1px solid #E7E3DA; border-bottom:1px solid #E7E3DA;}
-.ph-stat {padding:1.1rem 0 1.15rem 1.4rem; border-left:1px solid #E7E3DA;}
-.ph-stat:first-child {padding-left:0; border-left:none;}
-.ph-stat b {display:block; font-size:1.9rem; font-weight:600; color:#14212E;
-  line-height:1.15; letter-spacing:-0.025em; margin-bottom:0.2rem;}
-.ph-stat small {font-family:var(--mono); font-size:0.68rem; letter-spacing:0.1em;
-  text-transform:uppercase; color:#959DA8;}
-[data-testid="stMain"] .ph-section {margin:3.2rem 0 1.1rem 0;}
+/* Home only: the scene fills the whole main area, edge to edge */
+[data-testid="stMain"] {position:relative; background:#0A1522; overflow:hidden;}
+[data-testid="stMainBlockContainer"] {max-width:none; padding:0; height:100vh;}
+[data-testid="stHeader"] {background:transparent;}
+.st-key-solar_stage {position:absolute; inset:0; z-index:1; height:100vh !important;}
+.st-key-solar_stage *, .st-key-solar_stage iframe {
+  height:100vh !important; width:100% !important; display:block; border:0;}
+/* the page links a world clicks: present, never seen, not in the tab order */
+.st-key-solar_links {position:absolute; width:1px; height:1px; overflow:hidden;
+  visibility:hidden; pointer-events:none;}
+/* the tour pill floats over the sky, bottom right */
+[class*="st-key-tutpill_"][class*="home"] {
+  position:absolute !important; right:clamp(20px, 4vw, 56px); bottom:clamp(14px, 3vh, 26px);
+  left:auto; margin:0 !important; z-index:3; width:auto !important;}
+[class*="st-key-tutpill_"][class*="home"] button {
+  background:rgba(10,21,34,.7) !important; border:1px solid #2C445D !important;
+  backdrop-filter:blur(6px);}
+[class*="st-key-tutpill_"][class*="home"] button:hover {border-color:#D9B36A !important;}
+[class*="st-key-tutpill_"][class*="home"] button p {color:#D5DEE8 !important;}
+[class*="st-key-tutpill_"][class*="home"] button [data-testid="stIconMaterial"] {color:#D9B36A !important;}
 @media (max-width:640px) {
-  .ph-title {font-size:3rem;}
-  .ph-stats {grid-template-columns:repeat(2, 1fr);}
-  .ph-stat:nth-child(3) {padding-left:0; border-left:none;}
-  .ph-stat:nth-child(n+3) {border-top:1px solid #E7E3DA;}
+  [class*="st-key-tutpill_"][class*="home"] {right:auto; left:20px; bottom:46px;}
 }
-.ph-card-art {background:#FFFFFF; border-radius:10px; padding:6px 0; margin-bottom:0.6rem;}
-.ph-card-art img {display:block; width:100%; height:auto;}
-.ph-card-title {font-family:var(--serif); font-size:1.5rem; font-weight:400; color:#14212E;
-  line-height:1.1; margin:0.3rem 0 0.35rem 0;}
-.ph-card-sub {font-size:0.9rem; color:#6B7480; line-height:1.45; min-height:2.6rem;}
-.ph-soon-row {display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px;}
-.ph-soon {border:1px dashed #D9D3C5; border-radius:12px; padding:16px 18px; background:#FFFFFF;}
-.ph-soon-pill {display:inline-block; font-family:var(--mono); font-size:0.64rem; font-weight:500;
-  letter-spacing:0.12em; text-transform:uppercase; color:#8A6A22; background:#F6EEDD;
-  padding:2px 8px; border-radius:4px;}
-.ph-soon-title {font-family:var(--serif); font-size:1.35rem; font-weight:400; color:#14212E;
-  margin:0.55rem 0 0.2rem 0;}
-.ph-soon-sub {font-size:0.88rem; color:#8A939E; line-height:1.45;}
-.ph-play-title {font-family:var(--serif); font-size:1.7rem; font-weight:400; color:#14212E;
-  line-height:1.1; margin:0.25rem 0 0.3rem 0;}
-.ph-play-sub {font-size:0.95rem; color:#6B7480; line-height:1.5; min-height:4.5em;}
-.ph-play-bars {display:flex; flex-direction:column; gap:5px; padding:4px 0;}
-.ph-play-bars i {display:block; height:12px; border-radius:4px;}
-.ph-latest-meta {font-family:var(--mono); font-size:0.66rem; color:#8A6A22; font-weight:500;
-  letter-spacing:0.12em; text-transform:uppercase;}
-.ph-latest-title {font-family:var(--serif); font-size:1.7rem; font-weight:400; color:#14212E;
-  line-height:1.1; margin:0.3rem 0 0.3rem 0;}
-.ph-latest-sub {font-size:0.92rem; color:#6B7480;}
 </style>
 """
-
-
-def _svg_img(name):
-    data = base64.b64encode((STATIC / name).read_bytes()).decode()
-    return f"<img src='data:image/svg+xml;base64,{data}' alt=''>"
 
 
 @st.cache_data(show_spinner=False)
@@ -125,133 +80,32 @@ def _stats():
     return len(equity_universe()), years, len(MODEL_CONFIG)
 
 
+@st.cache_data(show_spinner=False)
+def _template():
+    return (STATIC / "home-solar.html").read_text(encoding="utf-8")
+
+
 def render():
     st.markdown(CSS, unsafe_allow_html=True)
-    left, right = st.columns([1, 1.15], gap="large", vertical_alignment="center")
-    with left:
-        st.markdown(
-            "<div class='ph-eyebrow'>PRISM</div>"
-            "<div class='ph-by'>by <b>Avin Bhagwani</b></div>"
-            "<div class='ph-title'>Every return has a <span>spectrum</span>.</div>"
-            "<div class='ph-sub'>PRISM looks through Indian funds, indices and "
-            "portfolios to show what really drives them.</div>",
-            unsafe_allow_html=True,
-        )
-        with st.container(key="ph_ctas", horizontal=True, gap="small"):
-            if "factor-analysis" in PAGES:
-                with st.container(key="ph_cta_primary", width="content"):
-                    st.page_link(PAGES["factor-analysis"], label="Analyse a fund",
-                                 icon=":material/arrow_forward:", icon_position="right")
-            if "fbi-intelligence" in PAGES:
-                with st.container(key="ph_cta_secondary", width="content"):
-                    st.page_link(PAGES["fbi-intelligence"], label="Explore indices",
-                                 icon=":material/query_stats:")
-        tutorial.launcher("home", "New here? Take the tour")
-    with right:
-        st.iframe((STATIC / "home-prism.html").read_text(encoding="utf-8"), height=400)
 
+    worlds = [{"path": p, "name": n, "desc": d, "cta": c}
+              for p, n, d, c in WORLDS if p in PAGES]
     n_idx, years, n_models = _stats()
-    st.markdown(
-        "<div class='ph-stats'>"
-        f"<div class='ph-stat'><b>{n_idx}</b><small>Nifty equity indices</small></div>"
-        f"<div class='ph-stat'><b>{years} years</b><small>of index history</small></div>"
-        f"<div class='ph-stat'><b>{n_models}</b><small>factor models</small></div>"
-        "<div class='ph-stat'><b>Free</b><small>to use</small></div>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    data = {
+        "worlds": worlds,
+        "soon": SOON,
+        "lede": ("PRISM looks through Indian funds, indices and portfolios to show "
+                 f"what really drives them. {_WORDS.get(len(worlds), len(worlds))} worlds, "
+                 "one question each."),
+        "tour": "New here? Start with the tour",
+        "stats": [[n_idx, "Nifty equity indices"], [years, "years of history"],
+                  [n_models, "factor models"], ["Free", "to use"]],
+    }
+    with st.container(key="solar_stage"):
+        st.iframe(_template().replace("__DATA__", json.dumps(data)), height=700)
 
-    st.markdown("<div class='ph-section'>Tools</div>", unsafe_allow_html=True)
-    cols = st.columns(len(LENSES), gap="medium")
-    for col, (path, title, art, blurb) in zip(cols, LENSES):
-        with col, st.container(key=f"card_lens_{path}"):
-            st.markdown(
-                f"<div class='ph-card-art'>{_svg_img(art)}</div>"
-                f"<div class='ph-card-title'>{title}</div>"
-                f"<div class='ph-card-sub'>{blurb}</div>",
-                unsafe_allow_html=True,
-            )
-            if path in PAGES:
-                st.page_link(PAGES[path], label=f"Open {title}",
-                             icon=":material/arrow_forward:")
+    with st.container(key="solar_links"):
+        for w in worlds:
+            st.page_link(PAGES[w["path"]], label=w["name"])
 
-    _play()
-    _on_the_way()
-    _latest_article()
-
-
-GAMES = [
-    ("try-to-time", "Think you can time the factors?",
-     "Back next year's winning index, every year from 2008, using only what was "
-     "known at the time. Then see how you did against holding all five.",
-     "Play Try to Time", "bars"),
-    ("can-you-handle-it", "Can you handle it?",
-     "Invest at the top, right before a crash, and live through it month by month. "
-     "The Sell button is always there.",
-     "Play Can You Handle It?", "fall"),
-]
-
-
-def _play():
-    games = [g for g in GAMES if g[0] in PAGES]
-    if not games:
-        return
-    st.markdown("<div class='ph-section'>Games</div>", unsafe_allow_html=True)
-    cols = st.columns(len(games), gap="medium")
-    for col, (path, title, blurb, cta, art) in zip(cols, games):
-        with col, st.container(key=f"card_play_{path}"):
-            if art == "bars":
-                pic = "".join(f"<i style='background:{c};width:{w}%'></i>" for c, w in
-                              [("#C08A2E", 92), ("#2F6FB0", 74), ("#8E5B9F", 66),
-                               ("#5E9A62", 48), ("#2F8F9D", 37)])
-                pic = f"<div class='ph-play-bars'>{pic}</div>"
-            else:
-                pic = ("<svg viewBox='0 0 300 76' width='100%' height='76' preserveAspectRatio='none'>"
-                       "<path d='M0,14 C40,16 55,52 80,64 S120,72 140,58 S190,20 215,15 L215,14 L0,14Z' "
-                       "fill='#F0525F' opacity='0.16'/>"
-                       "<line x1='0' x2='300' y1='14' y2='14' stroke='#CBD3DC' stroke-dasharray='4 4'/>"
-                       "<path d='M0,14 C40,16 55,52 80,64 S120,72 140,58 S190,20 215,15 S270,4 300,2' "
-                       "fill='none' stroke='#1F4E79' stroke-width='2.5'/></svg>")
-            st.markdown(
-                f"<div class='ph-card-art' style='padding:10px 12px;height:100px;display:flex;"
-                f"flex-direction:column;justify-content:center'>{pic}</div>"
-                f"<div class='ph-latest-meta'>Game</div>"
-                f"<div class='ph-play-title'>{title}</div>"
-                f"<div class='ph-play-sub'>{blurb}</div>",
-                unsafe_allow_html=True,
-            )
-            st.page_link(PAGES[path], label=cta, icon=":material/arrow_forward:")
-
-
-def _on_the_way():
-    st.markdown("<div class='ph-section'>On the way</div>", unsafe_allow_html=True)
-    cards = "".join(
-        f"<div class='ph-soon'><span class='ph-soon-pill'>Soon</span>"
-        f"<div class='ph-soon-title'>{t}</div><div class='ph-soon-sub'>{d}</div></div>"
-        for t, d in SOON
-    )
-    st.markdown(f"<div class='ph-soon-row'>{cards}</div>", unsafe_allow_html=True)
-
-
-def _latest_article():
-    posts, _ = sb.load_posts()
-    if not posts or "writing" not in PAGES:
-        return
-    p = posts[0]
-    st.markdown("<div class='ph-section'>From my Substack</div>", unsafe_allow_html=True)
-    with st.container(key="card_latest"):
-        a, b = st.columns([1, 2.4], gap="medium", vertical_alignment="center")
-        with a:
-            if p.cover:
-                st.image(p.cover, width="stretch")
-        with b:
-            date = f"{p.date:%d %b %Y}" if p.date else ""
-            st.markdown(
-                f"<div class='ph-latest-meta'>Latest · {date}</div>"
-                f"<div class='ph-latest-title'>{p.title}</div>"
-                f"<div class='ph-latest-sub'>{p.subtitle}</div>",
-                unsafe_allow_html=True,
-            )
-            st.page_link(PAGES["writing"], label="Read the article",
-                         icon=":material/arrow_forward:",
-                         query_params={"post": p.slug})
+    tutorial.launcher("home", "New here? Take the tour")
