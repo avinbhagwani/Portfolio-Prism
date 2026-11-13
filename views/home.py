@@ -50,46 +50,63 @@ SOON = [
 CSS = """
 <style>
 .ph-eyebrow {display:none;}
-.ph-by {font-size:0.88rem; color:#8A939E; margin:0 0 0.9rem 0;}
-.ph-by b {color:#5B6572; font-weight:500;}
-.ph-title {font-size:3.1rem; font-weight:700; color:#1B2533; line-height:1.06;
-  letter-spacing:-0.028em; margin:0 0 1rem 0;}
+.ph-by {display:flex; align-items:center; gap:0.7rem; font-family:var(--mono);
+  font-size:0.72rem; letter-spacing:0.14em; text-transform:uppercase; color:#5F6975;
+  margin:0 0 1.2rem 0;}
+.ph-by::before {content:""; width:28px; height:2px; border-radius:2px; background:var(--brass);}
+.ph-by b {color:#14212E; font-weight:500;}
+.ph-title {font-family:var(--serif); font-size:4.3rem; font-weight:400; color:#14212E;
+  line-height:0.98; letter-spacing:-0.015em; margin:0 0 1.3rem 0;}
+.ph-title span {font-style:italic; padding-right:0.06em;}
 .ph-title span {background: linear-gradient(90deg, #1F4E79, #2F8F9D 30%, #C08A2E 55%, #5E9A62 75%, #8E5B9F);
   -webkit-background-clip: text; background-clip: text; color: transparent;}
 .ph-sub {font-size:1.12rem; color:#5B6572; line-height:1.55; max-width:30rem; margin:0 0 1.6rem 0;}
-.st-key-ph_ctas a {border-radius:999px !important; padding:0.55rem 1.2rem !important;
+.st-key-ph_ctas a {border-radius:8px !important; padding:0.55rem 1.2rem !important;
   font-weight:500; transition:background 0.15s ease, border-color 0.15s ease;}
 .st-key-ph_ctas a p {font-size:0.95rem !important; font-weight:500 !important;}
-.st-key-ph_cta_primary a {background:#1F4E79 !important; border:1px solid #1F4E79 !important;}
+.st-key-ph_cta_primary a {background:#14212E !important; border:1px solid #14212E !important;}
 .st-key-ph_cta_primary a p, .st-key-ph_cta_primary a span {color:#FFFFFF !important;}
-.st-key-ph_cta_primary a:hover {background:#173E61 !important;}
-.st-key-ph_cta_secondary a {background:#FFFFFF !important; border:1px solid #D5DCE3 !important;}
-.st-key-ph_cta_secondary a p, .st-key-ph_cta_secondary a span {color:#1F4E79 !important;}
-.st-key-ph_cta_secondary a:hover {background:#F4F7FA !important; border-color:#B9C4CF !important;}
-.ph-stats {display:flex; gap:2.4rem; flex-wrap:wrap; margin:1.6rem 0 0.4rem 0;
-  padding:1rem 0; border-top:1px solid #ECEFF2; border-bottom:1px solid #ECEFF2;}
-.ph-stat b {display:block; font-size:1.6rem; font-weight:700; color:#1B2533;
-  letter-spacing:-0.02em; font-variant-numeric:tabular-nums;}
-.ph-stat small {font-size:0.82rem; color:#8A939E;}
-.ph-section {font-size:1.15rem; letter-spacing:-0.01em; color:#17212D;
-  font-weight:600; margin:2.8rem 0 0.9rem 0;}
+.st-key-ph_cta_primary a:hover {background:#22364B !important;}
+.st-key-ph_cta_secondary a {background:#FFFFFF !important; border:1px solid #D9D3C5 !important;}
+.st-key-ph_cta_secondary a p, .st-key-ph_cta_secondary a span {color:#14212E !important;}
+.st-key-ph_cta_secondary a:hover {background:#F6F4EF !important; border-color:#B08A3E !important;}
+.ph-stats {display:grid; grid-template-columns:repeat(4, 1fr); margin:1.8rem 0 0.4rem 0;
+  border-top:1px solid #E7E3DA; border-bottom:1px solid #E7E3DA;}
+.ph-stat {padding:1.1rem 0 1.15rem 1.4rem; border-left:1px solid #E7E3DA;}
+.ph-stat:first-child {padding-left:0; border-left:none;}
+.ph-stat b {display:block; font-size:1.9rem; font-weight:600; color:#14212E;
+  line-height:1.15; letter-spacing:-0.025em; margin-bottom:0.2rem;}
+.ph-stat small {font-family:var(--mono); font-size:0.68rem; letter-spacing:0.1em;
+  text-transform:uppercase; color:#959DA8;}
+[data-testid="stMain"] .ph-section {margin:3.2rem 0 1.1rem 0;}
+@media (max-width:640px) {
+  .ph-title {font-size:3rem;}
+  .ph-stats {grid-template-columns:repeat(2, 1fr);}
+  .ph-stat:nth-child(3) {padding-left:0; border-left:none;}
+  .ph-stat:nth-child(n+3) {border-top:1px solid #E7E3DA;}
+}
 .ph-card-art {background:#FFFFFF; border-radius:10px; padding:6px 0; margin-bottom:0.6rem;}
 .ph-card-art img {display:block; width:100%; height:auto;}
-.ph-card-title {font-size:1.08rem; font-weight:600; color:#1B2533; margin:0.1rem 0 0.25rem 0;}
+.ph-card-title {font-family:var(--serif); font-size:1.5rem; font-weight:400; color:#14212E;
+  line-height:1.1; margin:0.3rem 0 0.35rem 0;}
 .ph-card-sub {font-size:0.9rem; color:#6B7480; line-height:1.45; min-height:2.6rem;}
 .ph-soon-row {display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px;}
-.ph-soon {border:1px dashed #D5DCE3; border-radius:12px; padding:16px 18px; background:#FBFCFD;}
-.ph-soon-pill {display:inline-block; font-size:0.68rem; font-weight:600; letter-spacing:0.08em;
-  text-transform:uppercase; color:#9A6B1E; background:#FBF3E4; padding:2px 8px; border-radius:999px;}
-.ph-soon-title {font-size:1rem; font-weight:600; color:#4A5562; margin:0.5rem 0 0.2rem 0;}
+.ph-soon {border:1px dashed #D9D3C5; border-radius:12px; padding:16px 18px; background:#FFFFFF;}
+.ph-soon-pill {display:inline-block; font-family:var(--mono); font-size:0.64rem; font-weight:500;
+  letter-spacing:0.12em; text-transform:uppercase; color:#8A6A22; background:#F6EEDD;
+  padding:2px 8px; border-radius:4px;}
+.ph-soon-title {font-family:var(--serif); font-size:1.35rem; font-weight:400; color:#14212E;
+  margin:0.55rem 0 0.2rem 0;}
 .ph-soon-sub {font-size:0.88rem; color:#8A939E; line-height:1.45;}
-.ph-play-title {font-size:1.25rem; font-weight:600; color:#1B2533; margin:0.1rem 0 0.2rem 0;}
+.ph-play-title {font-family:var(--serif); font-size:1.7rem; font-weight:400; color:#14212E;
+  line-height:1.1; margin:0.25rem 0 0.3rem 0;}
 .ph-play-sub {font-size:0.95rem; color:#6B7480; line-height:1.5; min-height:4.5em;}
 .ph-play-bars {display:flex; flex-direction:column; gap:5px; padding:4px 0;}
 .ph-play-bars i {display:block; height:12px; border-radius:4px;}
-.ph-latest-meta {font-size:0.78rem; color:#9A6B1E; font-weight:600; letter-spacing:0.05em;
-  text-transform:uppercase;}
-.ph-latest-title {font-size:1.2rem; font-weight:600; color:#1B2533; margin:0.15rem 0 0.2rem 0;}
+.ph-latest-meta {font-family:var(--mono); font-size:0.66rem; color:#8A6A22; font-weight:500;
+  letter-spacing:0.12em; text-transform:uppercase;}
+.ph-latest-title {font-family:var(--serif); font-size:1.7rem; font-weight:400; color:#14212E;
+  line-height:1.1; margin:0.3rem 0 0.3rem 0;}
 .ph-latest-sub {font-size:0.92rem; color:#6B7480;}
 </style>
 """

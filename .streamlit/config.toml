@@ -8,12 +8,12 @@ toolbarMode = "minimal"
 base = "light"
 primaryColor = "#1F4E79"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F4F6F8"
-textColor = "#1B2533"
+secondaryBackgroundColor = "#F6F4EF"
+textColor = "#14212E"
 linkColor = "#1F4E79"
-borderColor = "#E3E7EC"
+borderColor = "#E7E3DA"
 showWidgetBorder = false
-baseRadius = "6px"
+baseRadius = "8px"
 font = "Inter, sans-serif"
 headingFont = "Inter, sans-serif"
 headingFontWeights = [600, 600, 600, 600, 600, 600]
@@ -38,9 +38,31 @@ family = "Inter"
 url = "app/static/fonts/Inter-Bold.woff2"
 weight = 700
 
+[[theme.fontFaces]]
+family = "Instrument Serif"
+url = "app/static/fonts/InstrumentSerif-Regular.woff2"
+weight = 400
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Instrument Serif"
+url = "app/static/fonts/InstrumentSerif-Italic.woff2"
+weight = 400
+style = "italic"
+
+[[theme.fontFaces]]
+family = "IBM Plex Mono"
+url = "app/static/fonts/IBMPlexMono-Regular.woff2"
+weight = 400
+
+[[theme.fontFaces]]
+family = "IBM Plex Mono"
+url = "app/static/fonts/IBMPlexMono-Medium.woff2"
+weight = 500
+
 [theme.sidebar]
-backgroundColor = "#0F2436"
-secondaryBackgroundColor = "#17324A"
-textColor = "#DCE4EC"
-primaryColor = "#E0B15C"
-borderColor = "#22405B"
+backgroundColor = "#0A1522"
+secondaryBackgroundColor = "#132335"
+textColor = "#D5DEE8"
+primaryColor = "#D9B36A"
+borderColor = "#1D3147"

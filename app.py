@@ -25,8 +25,6 @@ st.set_page_config(
 st.logo(str(STATIC / "prism-logo-light.svg"), size="large",
         icon_image=str(STATIC / "prism-icon-light.svg"))
 
-style.inject()
-
 PAGES = [
     st.Page(home.render, title="Home", icon=":material/home:",
             url_path="home", default=True),
@@ -48,6 +46,7 @@ PAGES = [
 
 page = st.navigation(PAGES, position="hidden")
 current = page.url_path or "home"
+style.inject(current)
 pages_by_path = {p.url_path or "home": p for p in PAGES}
 writing.PAGES = pages_by_path
 home.PAGES = pages_by_path
