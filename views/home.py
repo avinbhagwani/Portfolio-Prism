@@ -27,6 +27,7 @@ from core.config import MODEL_CONFIG
 from core.fbi_metrics import as_of_date, equity_universe
 from core.index_data import load_index_history
 from views import tutorial
+from views.style import LINES
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 PAGES = {}  # set by app.py
@@ -48,7 +49,7 @@ _WORDS = {5: "Five", 6: "Six", 7: "Seven", 8: "Eight", 9: "Nine"}
 CSS = """
 <style>
 /* Home only: the scene fills the whole main area, edge to edge */
-[data-testid="stMain"] {background:#0A1522; overflow:hidden;}
+[data-testid="stMain"] {background:#05090F; overflow:hidden;}
 [data-testid="stMainBlockContainer"] {max-width:none; padding:0; height:100vh;}
 [data-testid="stHeader"] {background:transparent;}
 .st-key-solar_stage {position:absolute; inset:0; z-index:1; height:100vh !important;}
@@ -59,16 +60,17 @@ CSS = """
   visibility:hidden; pointer-events:none;}
 /* the tour pill floats over the sky, bottom right */
 [class*="st-key-tutpill_"][class*="home"] {
-  position:absolute !important; right:clamp(20px, 4vw, 56px); bottom:clamp(14px, 3vh, 26px);
+  position:absolute !important; right:clamp(20px, 4vw, 56px);
+  bottom:calc((clamp(34px, 6vh, 56px) - 2rem) / 2);
   left:auto; margin:0 !important; z-index:3; width:auto !important;}
 [class*="st-key-tutpill_"][class*="home"] button {
-  background:rgba(10,21,34,.7) !important; border:1px solid #2C445D !important;
-  backdrop-filter:blur(6px);}
+  background:transparent !important; border:1px solid #2C445D !important; border-radius:2px !important;}
 [class*="st-key-tutpill_"][class*="home"] button:hover {border-color:#D9B36A !important;}
 [class*="st-key-tutpill_"][class*="home"] button p {color:#D5DEE8 !important;}
 [class*="st-key-tutpill_"][class*="home"] button [data-testid="stIconMaterial"] {color:#D9B36A !important;}
 @media (max-width:640px) {
-  [class*="st-key-tutpill_"][class*="home"] {right:auto; left:20px; bottom:46px;}
+  [class*="st-key-tutpill_"][class*="home"] {right:14px; bottom:calc(clamp(34px, 6vh, 56px) + 10px);}
+  [class*="st-key-tutpill_"][class*="home"] button {background:rgba(3,7,13,.8) !important;}
 }
 </style>
 """
@@ -90,7 +92,7 @@ def _template():
 def render():
     st.markdown(CSS, unsafe_allow_html=True)
 
-    worlds = [{"path": p, "name": n, "desc": d, "cta": c}
+    worlds = [{"path": p, "name": n, "desc": d, "cta": c, "idx": LINES[p][1]}
               for p, n, d, c in WORLDS if p in PAGES]
     n_idx, years, n_models = _stats()
     data = {
