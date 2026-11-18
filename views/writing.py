@@ -1,7 +1,9 @@
 """
 Writing: Avin's Substack inside PRISM.
 
-List view   featured latest article, the rest as a card grid, subscribe.
+List view   two sections: Notes first (short posts from Substack Notes,
+            as a card grid linking to each note), then Articles
+            (featured latest article, the rest as a card grid), subscribe.
 Reader view ?post=<slug>: the opening third of the article with images,
             then "Continue reading on Substack" (so every read counts in
             Substack's stats; links carry utm_source=prism), a subscribe box, a "try it in
@@ -66,6 +68,32 @@ CSS = """
 .pw-continue-sub {font-size:0.95rem; color:#6B7480; margin-bottom:12px;}
 .pw-empty {border:1px dashed #D5DAE0; border-radius:12px; padding:28px; text-align:center;
   color:#6B7480;}
+.pw-h2 {font-size:1.45rem; font-weight:600; color:#1B2533; letter-spacing:-0.01em;
+  margin:2.4rem 0 0.15rem 0; display:flex; align-items:baseline; gap:0.6rem;}
+.pw-h2 .pw-count {font-size:0.8rem; font-weight:500; color:#8A939E; letter-spacing:0.02em;}
+.pw-h2-sub {color:#6B7480; font-size:0.95rem; margin:0 0 1rem 0;}
+.pw-divider {border:none; border-top:1px solid var(--line, #E6E9ED); margin:2.6rem 0 0 0;}
+.pw-notes {display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+  gap:16px; align-items:start;}
+.pw-note {display:block; text-decoration:none !important; color:inherit !important;
+  background:var(--mist, #FAFAF7); border:1px solid var(--line, #E6E9ED); border-radius:14px;
+  padding:16px 18px 14px 18px;
+  transition:transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;}
+.pw-note:hover {transform:translateY(-2px); border-color:#D9D3C5;
+  box-shadow:0 10px 24px -14px rgba(20,33,46,.28);}
+.pw-note-head {display:flex; align-items:center; gap:8px; margin-bottom:8px;
+  font-size:0.8rem; color:#8A939E;}
+.pw-note-head b {color:#1B2533; font-weight:600; font-size:0.86rem;}
+.pw-note-text {font-size:0.95rem; line-height:1.55; color:#1B2533;
+  display:-webkit-box; -webkit-line-clamp:9; -webkit-box-orient:vertical; overflow:hidden;}
+.pw-note-text p {margin:0 0 0.6em 0;}
+.pw-note-text a {color:#1F4E79;}
+.pw-note-img {width:100%; max-height:240px; object-fit:cover; object-position:top;
+  border-radius:10px; margin-top:10px; display:block; border:1px solid var(--line, #E6E9ED);}
+.pw-note-foot {display:flex; justify-content:space-between; align-items:center;
+  margin-top:10px; font-size:0.8rem; color:#8A939E;}
+.pw-note-foot span.pw-go {color:#9A6B1E; font-weight:600;}
+@media (prefers-reduced-motion: reduce) {.pw-note {transition:none;} .pw-note:hover {transform:none;}}
 </style>
 """
 
@@ -133,12 +161,15 @@ def _close():
 # List
 # ---------------------------------------------------------------------
 
+NOTES_SHOWN = 6
+
+
 def _list(posts, error):
     st.markdown(
         "<div class='pw-eyebrow'>Writing</div>"
-        "<div class='pw-title'>Articles by Avin Bhagwani</div>"
-        "<div class='pw-sub'>Essays on factor investing and markets, the thinking "
-        f"behind PRISM. Published on {sb.PUBLICATION}.</div>",
+        "<div class='pw-title'>Writing by Avin Bhagwani</div>"
+        "<div class='pw-sub'>Quick notes and longer essays on factor investing and markets, "
+        f"the thinking behind PRISM. Published on {sb.PUBLICATION}.</div>",
         unsafe_allow_html=True,
     )
     tutorial.launcher("writing", "How this page works")
@@ -148,6 +179,75 @@ def _list(posts, error):
     c2.link_button("Open Substack", sb.tracked(sb.SUBSTACK_URL, "list-open"), icon=":material/open_in_new:",
                    width="stretch")
 
+    _notes_section()
+    st.markdown("<hr class='pw-divider'>", unsafe_allow_html=True)
+    _articles_section(posts)
+    _subscribe_box("Get new articles by email")
+
+
+def _heading(title, sub, count=None):
+    n = f"<span class='pw-count'>{count}</span>" if count else ""
+    st.markdown(f"<div class='pw-h2'>{title}{n}</div><div class='pw-h2-sub'>{sub}</div>",
+                unsafe_allow_html=True)
+
+
+def _ago(d):
+    if not d:
+        return ""
+    from datetime import datetime, timezone
+    secs = (datetime.now(timezone.utc) - d).total_seconds()
+    if secs < 3600:
+        return f"{max(1, int(secs // 60))}m ago"
+    if secs < 86400:
+        return f"{int(secs // 3600)}h ago"
+    if secs < 7 * 86400:
+        return f"{int(secs // 86400)}d ago"
+    return f"{d:%d %b %Y}"
+
+
+def _note_card(n):
+    img = (f"<img class='pw-note-img' src='{n.images[0]}' alt='' loading='lazy'>"
+           if n.images else "")
+    stats = " · ".join(x for x in [
+        f"♡ {n.likes}" if n.likes else "",
+        f"↻ {n.restacks}" if n.restacks else "",
+        f"💬 {n.replies}" if n.replies else "",
+    ] if x)
+    return (f"<a class='pw-note' href='{sb.tracked(n.url, 'note')}' target='_blank' rel='noopener'>"
+            f"<div class='pw-note-head'><b>Avin Bhagwani</b><span>· {_ago(n.date)}</span></div>"
+            f"<div class='pw-note-text'>{sb.note_html(n.body)}</div>{img}"
+            f"<div class='pw-note-foot'><span>{stats}</span>"
+            "<span class='pw-go'>Open note ↗</span></div></a>")
+
+
+def _notes_section():
+    notes, _ = sb.load_notes()
+    _heading("Notes", f"Short takes, posted on {sb.PUBLICATION} Notes.",
+             f"{len(notes)} note{'s' if len(notes) != 1 else ''}" if notes else None)
+    if not notes:
+        st.markdown(
+            "<div class='pw-empty'>Notes couldn't be loaded just now. "
+            f"You can read them on <a href='{sb.tracked(sb.NOTES_URL, 'notes-empty')}' "
+            f"target='_blank'>{sb.PUBLICATION}</a>.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+    shown = notes if st.session_state.get("pw_all_notes") else notes[:NOTES_SHOWN]
+    st.markdown("<div class='pw-notes'>" + "".join(_note_card(n) for n in shown) + "</div>",
+                unsafe_allow_html=True)
+    st.write("")
+    more = len(notes) > NOTES_SHOWN and not st.session_state.get("pw_all_notes")
+    c1, c2, _ = st.columns([1.3, 1.3, 4])
+    if more:
+        c1.button(f"Show all {len(notes)}", icon=":material/expand_more:",
+                  on_click=lambda: st.session_state.update(pw_all_notes=True), width="stretch")
+    (c2 if more else c1).link_button("All notes", sb.tracked(sb.NOTES_URL, "notes-all"),
+                   icon=":material/open_in_new:", width="stretch")
+
+
+def _articles_section(posts):
+    _heading("Articles", "Long-form essays with the research and data behind them.",
+             f"{len(posts)} article{'s' if len(posts) != 1 else ''}" if posts else None)
     if not posts:
         st.markdown(
             "<div class='pw-empty'>Articles couldn't be loaded just now. "
@@ -157,7 +257,6 @@ def _list(posts, error):
         )
         return
 
-    st.write("")
     first, rest = posts[0], posts[1:]
     with st.container(key="card_feature"):
         a, b = st.columns([1.15, 1], gap="large", vertical_alignment="center")
@@ -166,7 +265,7 @@ def _list(posts, error):
                 st.image(first.cover, width="stretch")
         with b:
             st.markdown(
-                "<span class='pw-pill'>Latest</span>"
+                "<span class='pw-pill'>Latest article</span>"
                 f"<div class='pw-meta'>{_meta(first)}</div>"
                 f"<div class='pw-feat-title'>{first.title}</div>"
                 f"<div class='pw-feat-sub'>{first.subtitle}</div>",
@@ -192,8 +291,6 @@ def _list(posts, error):
                     )
                     st.button("Read", key=f"read_{p.slug}", icon=":material/arrow_forward:",
                               icon_position="right", on_click=_open, args=(p.slug,))
-
-    _subscribe_box("Get new articles by email")
 
 
 # ---------------------------------------------------------------------

@@ -711,9 +711,10 @@ def _home_deck():
 
 def _writing_deck():
     return [
-        slide("Writing", "Articles from my Substack",
-              "<p>Essays on factor investing and markets: the thinking behind PRISM's tools. Open any article "
-              "to read it here, or on my Substack.</p>"),
+        slide("Writing", "Notes first, then articles",
+              "<p><b>Notes</b> are my short takes from my Substack: open one to read it, like or reply. "
+              "<b>Articles</b> are the long essays on factor investing and markets, the thinking behind "
+              "PRISM's tools. Open any article to read it here, or on my Substack.</p>"),
         slide("Writing", "Read, then try it",
               "<p>Most articles use a tool on this site. Read the idea, then open the tool and test it on a "
               "fund or index you care about.</p>",

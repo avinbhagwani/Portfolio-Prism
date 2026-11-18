@@ -313,3 +313,111 @@ def preview(body, share=0.15, min_words=50):
 
     i, words = best
     return "".join(blocks[: i + 1]), max(0, total - words)
+
+
+# ---------------------------------------------------------------------
+# Notes (short posts on Substack Notes)
+# ---------------------------------------------------------------------
+# Notes aren't in the RSS feed. They come from Substack's public profile
+# feed API, filtered to notes. Like articles, they are cached for an hour
+# and a failure shows a link instead of an error.
+
+USER_ID = 438737783
+HANDLE = "avinbhagwani1"
+NOTES_URL = f"https://substack.com/@{HANDLE}/notes"
+NOTES_API = f"https://substack.com/api/v1/reader/feed/profile/{USER_ID}"
+NOTES_FILE_ENV = "PRISM_SUBSTACK_NOTES_FILE"   # saved JSON for local testing
+
+
+@dataclass(frozen=True)
+class Note:
+    id: int
+    body: str
+    date: object          # datetime
+    url: str
+    images: tuple         # image URLs
+    likes: int
+    restacks: int
+    replies: int
+
+
+def _parse_notes(payload):
+    from datetime import datetime
+    notes = []
+    for item in payload.get("items", []):
+        c = item.get("comment") or {}
+        if item.get("type") != "comment" or not c.get("id"):
+            continue
+        if (item.get("context") or {}).get("type") not in (None, "note"):
+            continue                       # skip restacks of other people's notes
+        if c.get("user_id") not in (None, USER_ID):
+            continue
+        body = (c.get("body") or "").strip()
+        images = tuple(a.get("imageUrl") for a in c.get("attachments") or []
+                       if a.get("type") == "image" and a.get("imageUrl"))
+        if not body and not images:
+            continue
+        try:
+            date = datetime.fromisoformat((c.get("date") or "").replace("Z", "+00:00"))
+        except ValueError:
+            date = None
+        notes.append(Note(
+            id=int(c["id"]),
+            body=body,
+            date=date,
+            url=f"https://substack.com/@{HANDLE}/note/c-{c['id']}",
+            images=images,
+            likes=int(c.get("reaction_count") or 0),
+            restacks=int(c.get("restacks") or 0),
+            replies=int(c.get("children_count") or 0),
+        ))
+    return notes, payload.get("nextCursor")
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_notes(limit=30):
+    import json
+    path = os.environ.get(NOTES_FILE_ENV)
+    if path:
+        with open(path, encoding="utf-8") as fh:
+            notes, _ = _parse_notes(json.load(fh))
+    else:
+        notes, cursor = [], None
+        for _ in range(3):                 # a few pages is plenty
+            params = {"types[]": "note"}
+            if cursor:
+                params["cursor"] = cursor
+            r = requests.get(NOTES_API, params=params, headers=HEADERS, timeout=10)
+            r.raise_for_status()
+            page, cursor = _parse_notes(r.json())
+            notes.extend(page)
+            if not cursor or len(notes) >= limit:
+                break
+    seen, out = set(), []
+    for n in notes:
+        if n.id not in seen:
+            seen.add(n.id)
+            out.append(n)
+    out.sort(key=lambda n: (n.date is not None, n.date), reverse=True)
+    return out[:limit]
+
+
+def load_notes():
+    """Newest first. Returns (notes, error_message_or_None)."""
+    try:
+        return _load_notes(), None
+    except Exception as e:
+        return [], f"Couldn't reach Substack Notes ({type(e).__name__})."
+
+
+_URL_RE = re.compile(r"(https?://[^\s<]+[^\s<.,;:!?)\]'\"])")
+
+
+def note_html(body):
+    """Plain-text note body to safe HTML: paragraphs, line breaks, links."""
+    out = []
+    for para in re.split(r"\n\s*\n", body.strip()):
+        p = html.escape(para.strip())
+        p = _URL_RE.sub(r"<a href='\1' target='_blank' rel='noopener'>\1</a>", p)
+        out.append("<p>" + p.replace("\n", "<br>") + "</p>")
+    return "".join(out)
