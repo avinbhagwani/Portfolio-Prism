@@ -11,7 +11,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from core.index_data import refresh_if_stale
+from core.index_data import start_background_refresh
 from views import (factor_analysis, factor_indexes, drawdown_analysis, efficient_frontier,
                    games, home, intro, sidebar, style, tutorial, writing)
 
@@ -23,8 +23,8 @@ st.set_page_config(
     layout="wide",
 )
 
-# BigQuery-backed index data: reload (and clear derived caches) every 12 h
-refresh_if_stale()
+# Index data: pages use what's in memory; BigQuery loads in the background
+start_background_refresh()
 
 st.logo(str(STATIC / "prism-logo-light.svg"), size="large",
         icon_image=str(STATIC / "prism-icon-light.svg"))
