@@ -21,14 +21,16 @@ catalogue frame and load_index_history() a wide frame indexed by Date,
 one column per indexName. Sparse: most indices only have data from their
 launch date onward, so NaNs before that are expected.
 
-Both frames are loaded once per server process with st.cache_resource and
-shared read-only (st.cache_data would hand every caller a fresh copy of the
-~20 MB history frame). Callers must not modify them in place.
+Both frames are held once per server process and shared read-only.
+Callers must not modify them in place.
 
-Freshness: refresh_if_stale() (called from app.py on every run) reloads
-the data every REFRESH_HOURS and clears st.cache_data, because many
-derived results (hit ratios, game payloads, frontier inputs) are cached
-without a TTL and would otherwise keep serving the old numbers.
+Loading never blocks a page: the app starts on the bundled CSV, and a
+background thread (start_background_refresh, called from app.py) pulls
+BigQuery and swaps it in when it succeeds, then refreshes every
+REFRESH_HOURS (retrying every 30 min after a failure). Each swap clears
+st.cache_data, because many derived results (hit ratios, game payloads,
+frontier inputs) are cached without a TTL and would otherwise keep serving
+the old numbers.
 
 Configuration (environment variables, all optional):
   PRISM_INDEX_SOURCE     "bigquery" (default) or "csv" to skip BigQuery
@@ -55,7 +57,7 @@ HISTORY_PATH = DATA_DIR / "finapi_all_indices_history.csv"
 BQ_TABLE = os.environ.get("PRISM_BQ_TABLE",
                           "mutual-funds-data.mutual_fund_data.index_tri")
 REFRESH_HOURS = 12
-BQ_TIMEOUT_S = 90
+BQ_TIMEOUT_S = 120
 
 _CAT_COLS = ["indexName", "displayName", "indexType", "indexCategory"]
 
@@ -116,52 +118,81 @@ def _combine(bq_long, csv_cat, csv_hist):
     return cat.reset_index(drop=True), hist.sort_index()
 
 
-@st.cache_resource(show_spinner="Loading index data…")
-def _load_all():
-    """(catalogue, history, source, loaded_at) — loaded once per process."""
-    csv_cat, csv_hist = _read_csv_sources()
-    if os.environ.get("PRISM_INDEX_SOURCE", "bigquery").lower() != "csv":
-        try:
-            t0 = time.time()
-            cat, hist = _combine(_fetch_bigquery(), csv_cat, csv_hist)
-            log.info("Index data from BigQuery: %d indices to %s in %.1fs",
-                     hist.shape[1], hist.index.max().date(), time.time() - t0)
-            return cat, hist, "bigquery", time.time()
-        except Exception as e:
-            log.warning("BigQuery index load failed, using bundled CSV: %r", e)
-    return csv_cat, csv_hist.sort_index(), "csv", time.time()
+_lock = threading.Lock()
+_state = None            # (catalogue, history, source, loaded_at)
+_worker = None
 
 
-_refresh_lock = threading.Lock()
+def _set_state(cat, hist, source):
+    global _state
+    _state = (cat, hist.sort_index(), source, time.time())
 
 
-def refresh_if_stale():
-    """Reload index data (and drop derived caches) once it's REFRESH_HOURS old."""
-    *_, loaded_at = _load_all()
-    if time.time() - loaded_at < REFRESH_HOURS * 3600:
+def _current():
+    """Current data; the bundled CSV until a BigQuery load has succeeded."""
+    if _state is None:
+        with _lock:
+            if _state is None:
+                cat, hist = _read_csv_sources()
+                _set_state(cat, hist, "csv")
+    return _state
+
+
+def _try_bigquery():
+    """One BigQuery load attempt; swaps the data in only if it succeeds."""
+    try:
+        t0 = time.time()
+        csv_cat, csv_hist = _read_csv_sources()
+        cat, hist = _combine(_fetch_bigquery(), csv_cat, csv_hist)
+    except Exception as e:
+        log.warning("BigQuery index load failed, keeping %s data: %r",
+                    _current()[2], e)
+        return False
+    _set_state(cat, hist, "bigquery")
+    st.cache_data.clear()   # derived results were built from the old data
+    log.warning("Index data from BigQuery: %d indices to %s in %.1fs",
+                hist.shape[1], hist.index.max().date(), time.time() - t0)
+    return True
+
+
+def _refresh_loop():
+    while True:
+        ok = _try_bigquery()
+        # success: refresh every REFRESH_HOURS; failure: retry in 30 min
+        time.sleep(REFRESH_HOURS * 3600 if ok else 1800)
+
+
+def start_background_refresh():
+    """
+    Called from app.py on every run; never blocks. Pages always render from
+    the data already in memory (bundled CSV at first); a daemon thread pulls
+    BigQuery in the background and swaps it in when, and only if, it succeeds.
+    """
+    global _worker
+    _current()
+    if os.environ.get("PRISM_INDEX_SOURCE", "bigquery").lower() == "csv":
         return
-    with _refresh_lock:
-        *_, loaded_at = _load_all()
-        if time.time() - loaded_at < REFRESH_HOURS * 3600:
-            return  # another session already refreshed
-        _load_all.clear()
-        st.cache_data.clear()
-        _load_all()
+    if _worker is None:
+        with _lock:
+            if _worker is None:
+                _worker = threading.Thread(target=_refresh_loop, daemon=True,
+                                           name="prism-bq-refresh")
+                _worker.start()
 
 
 def data_source():
     """'bigquery' or 'csv' — where the current index data came from."""
-    return _load_all()[2]
+    return _current()[2]
 
 
 def load_catalogue():
     """One row per index: indexName, displayName, indexType, indexCategory."""
-    return _load_all()[0]
+    return _current()[0]
 
 
 def load_index_history():
     """Daily levels for every index, wide format, indexed by Date."""
-    return _load_all()[1]
+    return _current()[1]
 
 
 def list_index_types():
