@@ -11,7 +11,6 @@ from pathlib import Path
 
 import streamlit as st
 
-from core.index_data import refresh_if_stale
 from views import (factor_analysis, factor_indexes, drawdown_analysis, efficient_frontier,
                    games, home, intro, sidebar, style, tutorial, writing)
 
@@ -22,9 +21,6 @@ st.set_page_config(
     page_icon=str(STATIC / "prism-icon.svg"),
     layout="wide",
 )
-
-# BigQuery-backed index data: reload (and clear derived caches) every 12 h
-refresh_if_stale()
 
 st.logo(str(STATIC / "prism-logo-light.svg"), size="large",
         icon_image=str(STATIC / "prism-icon-light.svg"))
